@@ -380,7 +380,21 @@ export const importForecastData = [
 
 // Delete all forecasts
 export const deleteAllForecasts = asyncHandler(async (req: Request, res: Response) => {
-  const { data, error } = await supabase
+  // First get count of records to be deleted
+  const { count, error: countError } = await supabase
+    .from('forecasts')
+    .select('*', { count: 'exact', head: true });
+
+  if (countError) {
+    return res.status(400).json({
+      success: false,
+      message: 'Failed to count forecasts',
+      error: countError.message
+    });
+  }
+
+  // Then delete all records
+  const { error } = await supabase
     .from('forecasts')
     .delete()
     .neq('id', 0); // This deletes all records
@@ -396,6 +410,6 @@ export const deleteAllForecasts = asyncHandler(async (req: Request, res: Respons
   res.json({
     success: true,
     message: 'All forecast data deleted successfully',
-    deletedCount: data?.length || 0
+    deletedCount: count || 0
   });
 });
