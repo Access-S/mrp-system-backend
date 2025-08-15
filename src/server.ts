@@ -28,6 +28,7 @@ const corsOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
   'https://localhost:5173', // For HTTPS local development
+  'https://animated-space-lamp-r4xxrp67wq4r3pq6-5173.app.github.dev', // <-- FIX: ADD THIS LINE
 ].filter(Boolean) as string[];
 
 app.use(cors({
@@ -80,4 +81,4 @@ app.listen(PORT, () => {
   logger.info(`🗄️  Database: Supabase`);
 });
 
-export default app;// Updated Fri Aug 15 13:13:56 UTC 2025
+export default app;
