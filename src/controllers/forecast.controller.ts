@@ -29,7 +29,6 @@ export const uploadForecasts = asyncHandler(async (req: Request, res: Response) 
       cell => typeof cell === 'string' && /^[A-Za-z]{3}-\d{2}$/.test(cell)
     ).length;
     
-    // A header row should be dense and have many date-like columns
     const score = (density * 2) + datePatternMatch; 
 
     if (score > maxScore) {
@@ -124,7 +123,7 @@ export const uploadForecasts = asyncHandler(async (req: Request, res: Response) 
   });
 });
 
-// BLOCK 3: `getForecasts` Controller Function
+// BLOCK 3: `getForecasts` Controller Function (Corrected Version)
 export const getForecasts = asyncHandler(async (req: Request, res: Response) => {
   const { months, search } = req.query;
 
@@ -149,7 +148,7 @@ export const getForecasts = asyncHandler(async (req: Request, res: Response) => 
     query = query.lte('forecast_date', endDate);
   }
 
-  // 3. Apply search filtering on the related product's description
+  // 3. Apply search filtering
   if (search) {
     query = query.ilike('products.description', `%${search}%`);
   }
@@ -160,10 +159,17 @@ export const getForecasts = asyncHandler(async (req: Request, res: Response) => 
   // 4. Pivot the "long" data from the DB into "wide" format for the UI
   const productData: { [key: string]: any } = {};
   data.forEach(item => {
-    if (!item.products) return; 
+    // --- START OF THE FIX ---
+    const productInfo = item.products;
+    if (!productInfo) return;
 
-    const { product_code, description } = item.products;
-    const dateKey = item.forecast_date.substring(0, 7); // "YYYY-MM" format
+    const product = Array.isArray(productInfo) ? productInfo[0] : productInfo;
+    if (!product) return;
+
+    const { product_code, description } = product;
+    // --- END OF THE FIX ---
+    
+    const dateKey = item.forecast_date.substring(0, 7);
 
     if (!productData[product_code]) {
       productData[product_code] = { product_code, description };
@@ -173,7 +179,7 @@ export const getForecasts = asyncHandler(async (req: Request, res: Response) => 
 
   const rows = Object.values(productData);
   
-  // 5. Generate dynamic headers for the UI table
+  // 5. Generate dynamic headers
   const dateHeaders = [...new Set(data.map(item => item.forecast_date.substring(0, 7)))].sort();
 
   const staticHeaders = [
@@ -192,9 +198,9 @@ export const getForecasts = asyncHandler(async (req: Request, res: Response) => 
   const totalQuantity = data.reduce((sum, item) => sum + item.quantity, 0);
   const summary = {
     totalProducts: rows.length,
-    totalMonths: dateHeaders.length, // Months in the current view
+    totalMonths: dateHeaders.length,
     avgForecast: data.length > 0 ? totalQuantity / data.length : 0,
-    topProduct: "N/A" // Placeholder - requires a more complex query
+    topProduct: "N/A"
   };
 
   // 7. Send the final, structured response
