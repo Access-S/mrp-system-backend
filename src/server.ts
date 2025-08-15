@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 import productRoutes from './routes/product.routes';
 import purchaseOrderRoutes from './routes/purchaseOrder.routes';
 import sohRoutes from './routes/soh.routes';
+import forecastRoutes from './routes/forecast.routes';
 
 // Import middleware
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
@@ -21,32 +22,22 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Simple CORS configuration - allow all origins
+// CORS configuration - production ready
+const corsOrigins = [
+  process.env.CORS_ORIGIN,
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'https://localhost:5173', // For HTTPS local development
+].filter(Boolean) as string[];
+
 app.use(cors({
-  origin: true,  // Allow all origins
+  origin: corsOrigins,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  preflightContinue: false,
-  optionsSuccessStatus: 204
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json());
-
-// ADD THIS MANUAL CORS SECTION HERE ⬇️
-// Manual CORS headers as backup
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  
-  if (req.method === 'OPTIONS') {
-    res.sendStatus(200);
-  } else {
-    next();
-  }
-});
-// ADD ABOVE THIS LINE ⬆️
 
 // Trust proxy for Railway
 app.set('trust proxy', 1);
@@ -75,6 +66,7 @@ app.get('/health', (req, res) => {
 app.use('/api/products', productRoutes);
 app.use('/api/purchase-orders', purchaseOrderRoutes);
 app.use('/api/soh', sohRoutes);
+app.use('/api/forecasts', forecastRoutes);
 
 // BLOCK 5: Error Handling and Server Start
 // Error handling (must be last)
@@ -83,7 +75,7 @@ app.use(errorHandler);
 
 app.listen(PORT, () => {
   logger.info(`🚀 Server running on port ${PORT}`);
-  logger.info(`🌐 CORS Origin: ${process.env.CORS_ORIGIN}`);
+  logger.info(`🌐 CORS Origins: ${corsOrigins.join(', ')}`);
   logger.info(`📍 Environment: ${process.env.NODE_ENV}`);
   logger.info(`🗄️  Database: Supabase`);
 });
