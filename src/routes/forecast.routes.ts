@@ -6,7 +6,8 @@ import {
   updateForecast,
   getForecastSummary,
   searchForecasts,
-  importForecastData
+  importForecastData,
+  deleteAllForecasts
 } from '../controllers/forecast.controller';
 
 const router = express.Router();
@@ -31,5 +32,7 @@ router.get('/:productCode', getForecastByProductCode);
 
 // PUT /api/forecasts/:productCode - Update forecast
 router.put('/:productCode', updateForecast);
+
+router.delete('/', deleteAllForecasts);
 
 export default router;

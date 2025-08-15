@@ -377,3 +377,25 @@ export const importForecastData = [
     }
   })
 ];
+
+// Delete all forecasts
+export const deleteAllForecasts = asyncHandler(async (req: Request, res: Response) => {
+  const { data, error } = await supabase
+    .from('forecasts')
+    .delete()
+    .neq('id', 0); // This deletes all records
+
+  if (error) {
+    return res.status(400).json({
+      success: false,
+      message: 'Failed to delete forecasts',
+      error: error.message
+    });
+  }
+
+  res.json({
+    success: true,
+    message: 'All forecast data deleted successfully',
+    deletedCount: data?.length || 0
+  });
+});
