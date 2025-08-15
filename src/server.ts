@@ -26,13 +26,17 @@ const corsOrigins = [
   process.env.CORS_ORIGIN,
   'http://localhost:5173',
   'http://localhost:3000',
-  // Add your Gitpod frontend URL as backup
-  'https://cuddly-waddle-5g994xrv59w6cvqqw-5173.app.github.dev'
+  // Add your current frontend Codespace URL
+  'https://animated-space-lamp-r4xxrp67wq4r3pq6-5173.app.github.dev',
+  // Allow all origins temporarily for debugging
+  '*'
 ].filter(Boolean) as string[];
 
 app.use(cors({
   origin: corsOrigins,
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json());

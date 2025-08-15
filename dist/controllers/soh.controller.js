@@ -216,7 +216,7 @@ const importSohData = async (req, res) => {
                     selectedColumns.forEach((originalCol) => {
                         const cleanCol = cleanColumnNames[originalCol];
                         const colIndex = columnMapping[originalCol];
-                        let value = row[colIndex];
+                        let value = row[colIndex]; // <-- Fix: cast row to any[]
                         // Handle empty/null values
                         if (value === null || value === undefined || value === '') {
                             // Set default values based on column type
