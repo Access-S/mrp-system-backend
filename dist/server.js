@@ -11,6 +11,7 @@ const dotenv_1 = __importDefault(require("dotenv"));
 const product_routes_1 = __importDefault(require("./routes/product.routes"));
 const purchaseOrder_routes_1 = __importDefault(require("./routes/purchaseOrder.routes"));
 const soh_routes_1 = __importDefault(require("./routes/soh.routes"));
+const forecast_routes_1 = __importDefault(require("./routes/forecast.routes"));
 // Import middleware
 const errorHandler_1 = require("./middleware/errorHandler");
 const logger_1 = __importDefault(require("./utils/logger"));
@@ -20,17 +21,18 @@ dotenv_1.default.config();
 // BLOCK 2: App Configuration
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 3001;
-// CORS configuration - updated for production
+// CORS configuration - production ready
 const corsOrigins = [
     process.env.CORS_ORIGIN,
     'http://localhost:5173',
     'http://localhost:3000',
-    // Add your Gitpod frontend URL as backup
-    'https://cuddly-waddle-5g994xrv59w6cvqqw-5173.app.github.dev'
+    'https://localhost:5173', // For HTTPS local development
 ].filter(Boolean);
 app.use((0, cors_1.default)({
     origin: corsOrigins,
-    credentials: true
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express_1.default.json());
 // Trust proxy for Railway
@@ -57,13 +59,14 @@ app.get('/health', (req, res) => {
 app.use('/api/products', product_routes_1.default);
 app.use('/api/purchase-orders', purchaseOrder_routes_1.default);
 app.use('/api/soh', soh_routes_1.default);
+app.use('/api/forecasts', forecast_routes_1.default);
 // BLOCK 5: Error Handling and Server Start
 // Error handling (must be last)
 app.use(errorHandler_1.notFoundHandler);
 app.use(errorHandler_1.errorHandler);
 app.listen(PORT, () => {
     logger_1.default.info(`🚀 Server running on port ${PORT}`);
-    logger_1.default.info(`🌐 CORS Origin: ${process.env.CORS_ORIGIN}`);
+    logger_1.default.info(`🌐 CORS Origins: ${corsOrigins.join(', ')}`);
     logger_1.default.info(`📍 Environment: ${process.env.NODE_ENV}`);
     logger_1.default.info(`🗄️  Database: Supabase`);
 });
