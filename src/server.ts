@@ -21,25 +21,32 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// CORS configuration - updated for production
-const corsOrigins = [
-  process.env.CORS_ORIGIN,
-  'http://localhost:5173',
-  'http://localhost:3000',
-  // Add your current frontend Codespace URL
-  'https://animated-space-lamp-r4xxrp67wq4r3pq6-5173.app.github.dev',
-  // Allow all origins temporarily for debugging
-  '*'
-].filter(Boolean) as string[];
-
+// Simple CORS configuration - allow all origins
 app.use(cors({
-  origin: corsOrigins,
+  origin: true,  // Allow all origins
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
 
 app.use(express.json());
+
+// ADD THIS MANUAL CORS SECTION HERE ⬇️
+// Manual CORS headers as backup
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+  } else {
+    next();
+  }
+});
+// ADD ABOVE THIS LINE ⬆️
 
 // Trust proxy for Railway
 app.set('trust proxy', 1);
