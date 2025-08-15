@@ -1,38 +1,26 @@
-import express from 'express';
-import { 
-  getAllForecasts,
-  getForecastByProductCode,
-  getForecastByMonth,
-  updateForecast,
-  getForecastSummary,
-  searchForecasts,
-  importForecastData,
-  deleteAllForecasts
-} from '../controllers/forecast.controller';
+// BLOCK 1: Imports
+import { Router } from 'express';
+import multer from 'multer';
+import { getForecasts, uploadForecasts } from '../controllers/forecast.controller';
 
-const router = express.Router();
+// BLOCK 2: Middleware Setup
+// Configure multer to handle file uploads in memory.
+// It will look for a file in a form field named 'forecastFile'.
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
 
-// GET /api/forecasts - Get all forecasts
-router.get('/', getAllForecasts);
+// BLOCK 3: Route Definitions
+const router = Router();
 
-// GET /api/forecasts/summary - Get forecast summary
-router.get('/summary', getForecastSummary);
+// Defines the GET endpoint for fetching forecast data.
+// e.g., GET http://localhost:3001/api/forecasts?months=4
+router.get('/', getForecasts);
 
-// GET /api/forecasts/search - Search forecasts
-router.get('/search', searchForecasts);
+// Defines the POST endpoint for uploading the Excel file.
+// The `upload.single('forecastFile')` middleware will process the file first,
+// then pass the request to the `uploadForecasts` controller.
+router.post('/upload', upload.single('forecastFile'), uploadForecasts);
 
-// POST /api/forecasts/import - Import forecast data
-router.post('/import', importForecastData);
 
-// GET /api/forecasts/month/:month - Get forecasts by month
-router.get('/month/:month', getForecastByMonth);
-
-// GET /api/forecasts/:productCode - Get forecast by product code
-router.get('/:productCode', getForecastByProductCode);
-
-// PUT /api/forecasts/:productCode - Update forecast
-router.put('/:productCode', updateForecast);
-
-router.delete('/', deleteAllForecasts);
-
+// BLOCK 4: Export Router
 export default router;

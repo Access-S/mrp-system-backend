@@ -1,0 +1,62 @@
+.
+├── backend
+│   ├── database
+│   │   ├── migrations
+│   │   │   └── 001_create_soh_table.sql
+│   │   └── schema
+│   │       ├── functions.sql
+│   │       └── tables.sql
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── src
+│   │   ├── config
+│   │   │   └── supabase.ts
+│   │   ├── controllers
+│   │   │   ├── product.controller.ts
+│   │   │   ├── purchaseOrder.controller.ts
+│   │   │   └── soh.controller.ts
+│   │   ├── middleware
+│   │   │   ├── errorHandler.ts
+│   │   │   └── validation.ts
+│   │   ├── routes
+│   │   │   ├── product.routes.ts
+│   │   │   ├── purchaseOrder.routes.ts
+│   │   │   └── soh.routes.ts
+│   │   ├── server.ts
+│   │   └── utils
+│   │       ├── asyncHandler.ts
+│   │       └── logger.ts
+│   └── tsconfig.json
+├── database
+│   ├── migrations
+│   │   └── 001_create_soh_table.sql
+│   └── schema
+│       ├── functions.sql
+│       └── tables.sql
+├── package-lock.json
+├── package.json
+├── project-structure.txt
+├── railway.json
+├── src
+│   ├── config
+│   │   └── supabase.ts
+│   ├── controllers
+│   │   ├── forecast.controller.ts
+│   │   ├── product.controller.ts
+│   │   ├── purchaseOrder.controller.ts
+│   │   └── soh.controller.ts
+│   ├── middleware
+│   │   ├── errorHandler.ts
+│   │   └── validation.ts
+│   ├── routes
+│   │   ├── forecast.routes.ts
+│   │   ├── product.routes.ts
+│   │   ├── purchaseOrder.routes.ts
+│   │   └── soh.routes.ts
+│   ├── server.ts
+│   └── utils
+│       ├── asyncHandler.ts
+│       └── logger.ts
+└── tsconfig.json
+
+20 directories, 40 files
