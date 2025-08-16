@@ -18,41 +18,44 @@ import './config/supabase';
 
 dotenv.config();
 
-// BLOCK 2: App Configuration (REVISED FOR ROBUST CORS)
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Define a clear list of allowed origins for CORS
+// BLOCK 2: App Configuration (RE-ORDERED)
+
+// --- START OF THE FIX ---
+// STEP 1: Configure CORS as the VERY FIRST middleware. This is critical.
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
   'https://localhost:5173',
   'https://animated-space-lamp-r4xxrp67wq4r3pq6-5173.app.github.dev'
 ];
-
-// If a production frontend URL is provided in environment variables, add it to the list
 if (process.env.CORS_ORIGIN) {
   allowedOrigins.push(process.env.CORS_ORIGIN);
 }
 
-// Use a more robust CORS configuration with a function-based origin check
 app.use(cors({
-  origin: '*', // Allow any origin
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('This origin is not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// CRITICAL: Handle pre-flight OPTIONS requests. This must come after the main cors middleware.
-// The browser sends an OPTIONS request first to check permissions before sending the actual request (e.g., GET/POST).
-// This handler ensures those permission checks succeed.
+// STEP 2: Place the pre-flight handler immediately after CORS.
 app.options('*', cors());
 
-// Standard middleware
+// STEP 3: Now, set up other middleware.
 app.use(express.json());
+app.set('trust proxy', 1); // For Railway
+// --- END OF THE FIX ---
 
-// Trust proxy headers from Railway
-app.set('trust proxy', 1);
 
 // BLOCK 3: Health Check Routes
 app.get('/', (req, res) => {
@@ -81,13 +84,11 @@ app.use('/api/soh', sohRoutes);
 app.use('/api/forecasts', forecastRoutes);
 
 // BLOCK 5: Error Handling and Server Start
-// Error handling (must be last)
 app.use(notFoundHandler);
 app.use(errorHandler);
 
 app.listen(PORT, () => {
   logger.info(`🚀 Server running on port ${PORT}`);
-  // Log the final, effective list of allowed origins
   logger.info(`🌐 CORS Allowed Origins: ${allowedOrigins.join(', ')}`);
   logger.info(`📍 Environment: ${process.env.NODE_ENV}`);
   logger.info(`🗄️  Database: Supabase`);
