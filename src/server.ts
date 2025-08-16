@@ -37,15 +37,7 @@ if (process.env.CORS_ORIGIN) {
 
 // Use a more robust CORS configuration with a function-based origin check
 app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (like Postman, mobile apps) or from our whitelist
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      // If the origin is not in our whitelist, reject the request
-      callback(new Error('This origin is not allowed by CORS'));
-    }
-  },
+  origin: '*', // Allow any origin
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
