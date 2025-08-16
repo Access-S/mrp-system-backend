@@ -21,7 +21,7 @@ const router = Router();
 
 // MODIFIED: Added validateQuery middleware
 router.get('/', 
-  validateQuery(forecastQuerySchema), 
+  // validateQuery(forecastQuerySchema), 
   asyncHandler(getForecasts)
 );
 
