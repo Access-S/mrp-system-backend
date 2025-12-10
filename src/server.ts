@@ -29,12 +29,28 @@ const allowedOrigins = [
   'http://localhost:3000',
   'https://localhost:5173',
   'https://animated-space-lamp-r4xxrp67wq4r3pq6-5173.app.github.dev',
-  'https://mrp-frontend.onrender.com',  // ✅ Add Render frontend URL
-  'https://*.onrender.com'              // ✅ Wildcard for Render domains
+  'https://mrp-frontend.onrender.com',
+  'https://mrp-frontend-gceq.onrender.com',  // ✅ ADD YOUR EXACT FRONTEND URL
+  'https://*.onrender.com',
+  'https://bug-free-sniffle-69ppr45vwq5jf5wr.github.dev/'
 ];
 if (process.env.CORS_ORIGIN) {
   allowedOrigins.push(process.env.CORS_ORIGIN);
 }
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.log('CORS blocked origin:', origin); // ✅ Add logging
+      callback(new Error('This origin is not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 // STEP 2: Place the pre-flight handler immediately after CORS.
 app.options('*', cors());
