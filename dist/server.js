@@ -18,25 +18,39 @@ const logger_1 = __importDefault(require("./utils/logger"));
 // Import Supabase to initialize connection
 require("./config/supabase");
 dotenv_1.default.config();
-// BLOCK 2: App Configuration
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 3001;
-// CORS configuration - production ready
-const corsOrigins = [
-    process.env.CORS_ORIGIN,
+// BLOCK 2: App Configuration (RE-ORDERED)
+// --- START OF THE FIX ---
+// STEP 1: Configure CORS as the VERY FIRST middleware. This is critical.
+const allowedOrigins = [
     'http://localhost:5173',
     'http://localhost:3000',
-    'https://localhost:5173', // For HTTPS local development
-].filter(Boolean);
+    'https://localhost:5173',
+    'https://animated-space-lamp-r4xxrp67wq4r3pq6-5173.app.github.dev'
+];
+if (process.env.CORS_ORIGIN) {
+    allowedOrigins.push(process.env.CORS_ORIGIN);
+}
 app.use((0, cors_1.default)({
-    origin: corsOrigins,
+    origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        }
+        else {
+            callback(new Error('This origin is not allowed by CORS'));
+        }
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
+// STEP 2: Place the pre-flight handler immediately after CORS.
+app.options('*', (0, cors_1.default)());
+// STEP 3: Now, set up other middleware.
 app.use(express_1.default.json());
-// Trust proxy for Railway
-app.set('trust proxy', 1);
+app.set('trust proxy', 1); // For Railway
+// --- END OF THE FIX ---
 // BLOCK 3: Health Check Routes
 app.get('/', (req, res) => {
     res.json({
@@ -61,12 +75,11 @@ app.use('/api/purchase-orders', purchaseOrder_routes_1.default);
 app.use('/api/soh', soh_routes_1.default);
 app.use('/api/forecasts', forecast_routes_1.default);
 // BLOCK 5: Error Handling and Server Start
-// Error handling (must be last)
 app.use(errorHandler_1.notFoundHandler);
 app.use(errorHandler_1.errorHandler);
 app.listen(PORT, () => {
     logger_1.default.info(`🚀 Server running on port ${PORT}`);
-    logger_1.default.info(`🌐 CORS Origins: ${corsOrigins.join(', ')}`);
+    logger_1.default.info(`🌐 CORS Allowed Origins: ${allowedOrigins.join(', ')}`);
     logger_1.default.info(`📍 Environment: ${process.env.NODE_ENV}`);
     logger_1.default.info(`🗄️  Database: Supabase`);
 });

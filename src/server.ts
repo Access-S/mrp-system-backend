@@ -23,39 +23,25 @@ const PORT = process.env.PORT || 3001;
 
 // BLOCK 2: App Configuration (RE-ORDERED)
 
-// --- START OF THE FIX ---
 // STEP 1: Configure CORS as the VERY FIRST middleware. This is critical.
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
   'https://localhost:5173',
-  'https://animated-space-lamp-r4xxrp67wq4r3pq6-5173.app.github.dev'
+  'https://animated-space-lamp-r4xxrp67wq4r3pq6-5173.app.github.dev',
+  'https://mrp-frontend.onrender.com',  // ✅ Add Render frontend URL
+  'https://*.onrender.com'              // ✅ Wildcard for Render domains
 ];
 if (process.env.CORS_ORIGIN) {
   allowedOrigins.push(process.env.CORS_ORIGIN);
 }
-
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('This origin is not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
 
 // STEP 2: Place the pre-flight handler immediately after CORS.
 app.options('*', cors());
 
 // STEP 3: Now, set up other middleware.
 app.use(express.json());
-app.set('trust proxy', 1); // For Railway
-// --- END OF THE FIX ---
-
+app.set('trust proxy', 1);
 
 // BLOCK 3: Health Check Routes
 app.get('/', (req, res) => {
@@ -74,6 +60,16 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV,
     database: 'Supabase'
+  });
+});
+
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'healthy', 
+    timestamp: new Date().toISOString(),
+    service: 'MRP Backend API',
+    version: '1.0.0',
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
