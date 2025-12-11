@@ -8,11 +8,11 @@ const router = Router();
 
 // Validation schemas
 const productParamsSchema = Joi.object({
-  productId: Joi.string().uuid().required()
+  productCode: Joi.string().required()  // ✅ Changed from UUID to string
 });
 
 // Routes with async handling
 router.get('/', asyncHandler(getAllProducts));
-router.get('/:productId/bom', validateParams(productParamsSchema), asyncHandler(getBomForProduct));
+router.get('/:productCode/bom', validateParams(productParamsSchema), asyncHandler(getBomForProduct));  // ✅ Changed param name
 
 export default router;
