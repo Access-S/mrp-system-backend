@@ -9,21 +9,27 @@ import logger from '../utils/logger';
 import { createError } from '../middleware/errorHandler';
 
 
-// BLOCK 2: `uploadForecasts` Controller (WITH DEBUG LOGGING)
+// BLOCK 2: `uploadForecasts` Controller
 export const uploadForecasts = asyncHandler(async (req: Request, res: Response) => {
-  // ADD THESE DEBUG LOGS AT THE VERY START:
-  console.log('=== UPLOAD FORECAST START ===');
+  // DEBUG LOGGING - ADDED AT START
+  console.log('=== UPLOAD FORECAST DEBUG START ===');
   console.log('Request received at:', new Date().toISOString());
   console.log('Has file:', !!req.file);
   if (req.file) {
     console.log('File name:', req.file.originalname);
     console.log('File size:', req.file.size);
     console.log('File mimetype:', req.file.mimetype);
+    console.log('File buffer length:', req.file.buffer?.length);
   }
   console.log('Body keys:', Object.keys(req.body));
+  console.log('Body data exists:', !!req.body.data);
+  if (req.body.data) {
+    console.log('Body data type:', typeof req.body.data);
+    console.log('Body data first 100 chars:', req.body.data.substring(0, 100));
+  }
   console.log('Content-Type header:', req.headers['content-type']);
-  console.log('=== UPLOAD FORECAST END ===');
-  
+  console.log('=== UPLOAD FORECAST DEBUG END ===');
+
   // Log what we receive
   logger.info('Upload request received:', {
     hasFile: !!req.file,
@@ -37,7 +43,6 @@ export const uploadForecasts = asyncHandler(async (req: Request, res: Response) 
   });
 
   let jsonData: any[] = [];
-  
   
   // OPTION 1: Process if frontend sent JSON in FormData
   if (req.body.data) {
@@ -233,108 +238,6 @@ export const uploadForecasts = asyncHandler(async (req: Request, res: Response) 
     }
   });
 });
-
-// Helper function to process JSON data from frontend
-async function processJsonForecastData(jsonData: any[]): Promise<any> {
-  logger.info('Processing JSON forecast data:', { recordCount: jsonData.length });
-  
-  if (!jsonData || jsonData.length === 0) {
-    throw createError('No data found in JSON.', 400);
-  }
-
-  const firstRow = jsonData[0];
-  const headers = Object.keys(firstRow);
-  
-  logger.info('JSON headers:', headers);
-  
-  const productCodeHeader = headers.find(h => h.toLowerCase().trim() === 'product');
-  const descriptionHeader = headers.find(h => h.toLowerCase().trim() === 'description');
-  
-  if (!productCodeHeader) {
-    throw createError("Could not find a 'Product' column in the data.", 400);
-  }
-  
-  // Clear existing data
-  logger.info('Deleting existing forecast records...');
-  const { error: deleteError } = await supabase.from('forecasts').delete().neq('id', 0);
-  if (deleteError) {
-    logger.error('Supabase error deleting old forecasts', { error: deleteError });
-    throw createError('Failed to clear old forecast data.', 500);
-  }
-  
-  const forecastsToInsert: { 
-    product_code: string; 
-    description: string; 
-    forecast_date: string; 
-    quantity: number 
-  }[] = [];
-  
-  // Process each JSON row
-  for (const row of jsonData) {
-    const productCode = row[productCodeHeader]?.toString().trim();
-    const description = descriptionHeader ? (row[descriptionHeader]?.toString().trim() || '') : '';
-    
-    if (!productCode || productCode === '') continue;
-    
-    // Process each header that looks like a date
-    headers.forEach(header => {
-      if (header !== productCodeHeader && header !== descriptionHeader) {
-        const headerStr = header.trim();
-        const dateMatch = headerStr.match(/^([a-z]{3})[a-z]*\s*[-\s/]\s*(\d{2,4})$/i);
-        
-        if (dateMatch) {
-          const monthStr = dateMatch[1].toLowerCase();
-          const yearStr = dateMatch[2];
-          
-          const monthMap: { [key: string]: number } = {
-            'jan': 0, 'feb': 1, 'mar': 2, 'apr': 3, 'may': 4, 'jun': 5,
-            'jul': 6, 'aug': 7, 'sep': 8, 'oct': 9, 'nov': 10, 'dec': 11
-          };
-          
-          const month = monthMap[monthStr];
-          if (month === undefined) return;
-          
-          let year = parseInt(yearStr);
-          if (yearStr.length === 2) {
-            year = 2000 + year;
-          }
-          
-          const quantity = parseInt(row[header], 10);
-          if (!isNaN(quantity)) {
-            const forecastDate = new Date(year, month, 1).toISOString().split('T')[0];
-            
-            forecastsToInsert.push({
-              product_code: productCode,
-              description: description,
-              forecast_date: forecastDate,
-              quantity: quantity
-            });
-          }
-        }
-      }
-    });
-  }
-  
-  // Insert data
-  logger.info(`Inserting ${forecastsToInsert.length} new forecast records from JSON...`);
-  if (forecastsToInsert.length > 0) {
-    const { error: forecastError } = await supabase.from('forecasts').insert(forecastsToInsert);
-    if (forecastError) {
-      logger.error('Supabase error inserting new forecasts', { error: forecastError });
-      throw createError('Failed to insert new forecast data.', 500);
-    }
-  }
-  
-  return {
-    success: true,
-    message: `Forecast data imported successfully. ${forecastsToInsert.length} forecast entries created.`,
-    debug: {
-      source: 'json-data',
-      productColumn: productCodeHeader,
-      descriptionColumn: descriptionHeader || 'Not found'
-    }
-  };
-}
 
 // BLOCK 3: `getForecasts` Controller (FIXED TYPE ERRORS)
 export const getForecasts = async (req: Request, res: Response) => {
