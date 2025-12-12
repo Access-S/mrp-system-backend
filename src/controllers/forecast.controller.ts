@@ -9,8 +9,40 @@ import logger from '../utils/logger';
 import { createError } from '../middleware/errorHandler';
 
 
-// BLOCK 2: `uploadForecasts` Controller (FIXED HEADER DETECTION)
+// BLOCK 2: `uploadForecasts` Controller (HANDLES FORM DATA WITH JSON)
 export const uploadForecasts = asyncHandler(async (req: Request, res: Response) => {
+  // Log what we receive
+  logger.info('Upload request received:', {
+    hasFile: !!req.file,
+    fileInfo: req.file ? {
+      originalname: req.file.originalname,
+      size: req.file.size,
+      mimetype: req.file.mimetype
+    } : null,
+    bodyKeys: Object.keys(req.body),
+    contentType: req.headers['content-type']
+  });
+
+  let jsonData: any[] = [];
+  
+  // OPTION 1: Process if frontend sent JSON in FormData
+  if (req.body.data) {
+    try {
+      jsonData = JSON.parse(req.body.data);
+      logger.info('Received JSON data from frontend, records:', jsonData.length);
+      
+      // Process JSON data instead of Excel file
+      if (jsonData.length > 0) {
+        const result = await processJsonForecastData(jsonData);
+        return res.status(201).json(result);
+      }
+    } catch (error) {
+      logger.error('Failed to parse JSON data from FormData:', error);
+      // Fall through to file processing
+    }
+  }
+  
+  // OPTION 2: Process Excel file (original logic)
   if (!req.file) {
     throw createError('No file uploaded.', 400);
   }
@@ -19,14 +51,12 @@ export const uploadForecasts = asyncHandler(async (req: Request, res: Response) 
   const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
   const sheetName = workbook.SheetNames[0];
   const worksheet = workbook.Sheets[sheetName];
-  
-  // Use header: 1 to get raw array, not JSON
   const data: any[][] = xlsx.utils.sheet_to_json(worksheet, { header: 1 });
 
   // DEBUG: Log first few rows to see actual data
   logger.info('Excel raw data first 3 rows:', data.slice(0, 3));
 
-  // Find header row (more flexible search)
+  // Find header row
   let headerRowIndex = -1;
   let maxScore = -1;
   
@@ -38,17 +68,17 @@ export const uploadForecasts = asyncHandler(async (req: Request, res: Response) 
       if (typeof cell === 'string') {
         const lower = cell.toLowerCase().trim();
         
-        // Score for product column (case insensitive, allows spaces)
-        if (lower.includes('product') || lower.includes('item') || lower.includes('code')) {
+        // Score for product column
+        if (lower === 'product' || lower.includes('product')) {
           score += 3;
         }
         
         // Score for description column
-        if (lower.includes('description') || lower.includes('desc') || lower.includes('name')) {
+        if (lower === 'description' || lower.includes('description')) {
           score += 2;
         }
         
-        // Score for date columns (month abbreviations)
+        // Score for date columns
         if (/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s*[-/]\s*\d{2,4}/i.test(lower)) {
           score += 1;
         }
@@ -92,15 +122,17 @@ export const uploadForecasts = asyncHandler(async (req: Request, res: Response) 
     quantity: number 
   }[] = [];
   
-  // FIXED: More flexible product column detection
+  // Find product column (exact match first, then contains)
   const codeHeader = headers.find(h => 
-    h && typeof h === 'string' && 
-    h.toLowerCase().trim().includes('product')
+    h && typeof h === 'string' && h.toLowerCase().trim() === 'product'
+  ) || headers.find(h => 
+    h && typeof h === 'string' && h.toLowerCase().trim().includes('product')
   );
   
   const descHeader = headers.find(h => 
-    h && typeof h === 'string' && 
-    (h.toLowerCase().trim().includes('description') || h.toLowerCase().trim().includes('desc'))
+    h && typeof h === 'string' && h.toLowerCase().trim() === 'description'
+  ) || headers.find(h => 
+    h && typeof h === 'string' && h.toLowerCase().trim().includes('description')
   );
   
   if (!codeHeader) {
@@ -128,7 +160,7 @@ export const uploadForecasts = asyncHandler(async (req: Request, res: Response) 
       if (header && typeof header === 'string') {
         const headerStr = header.toString().trim();
         
-        // FIXED: More flexible date pattern matching
+        // Date pattern matching
         const dateMatch = headerStr.match(/^([a-z]{3})[a-z]*\s*[-\s/]\s*(\d{2,4})$/i);
         
         if (dateMatch) {
@@ -182,10 +214,113 @@ export const uploadForecasts = asyncHandler(async (req: Request, res: Response) 
     debug: {
       headersFound: headers,
       productColumn: codeHeader,
-      descriptionColumn: descHeader || 'Not found'
+      descriptionColumn: descHeader || 'Not found',
+      source: 'excel-file'
     }
   });
 });
+
+// Helper function to process JSON data from frontend
+async function processJsonForecastData(jsonData: any[]): Promise<any> {
+  logger.info('Processing JSON forecast data:', { recordCount: jsonData.length });
+  
+  if (!jsonData || jsonData.length === 0) {
+    throw createError('No data found in JSON.', 400);
+  }
+
+  const firstRow = jsonData[0];
+  const headers = Object.keys(firstRow);
+  
+  logger.info('JSON headers:', headers);
+  
+  const productCodeHeader = headers.find(h => h.toLowerCase().trim() === 'product');
+  const descriptionHeader = headers.find(h => h.toLowerCase().trim() === 'description');
+  
+  if (!productCodeHeader) {
+    throw createError("Could not find a 'Product' column in the data.", 400);
+  }
+  
+  // Clear existing data
+  logger.info('Deleting existing forecast records...');
+  const { error: deleteError } = await supabase.from('forecasts').delete().neq('id', 0);
+  if (deleteError) {
+    logger.error('Supabase error deleting old forecasts', { error: deleteError });
+    throw createError('Failed to clear old forecast data.', 500);
+  }
+  
+  const forecastsToInsert: { 
+    product_code: string; 
+    description: string; 
+    forecast_date: string; 
+    quantity: number 
+  }[] = [];
+  
+  // Process each JSON row
+  for (const row of jsonData) {
+    const productCode = row[productCodeHeader]?.toString().trim();
+    const description = descriptionHeader ? (row[descriptionHeader]?.toString().trim() || '') : '';
+    
+    if (!productCode || productCode === '') continue;
+    
+    // Process each header that looks like a date
+    headers.forEach(header => {
+      if (header !== productCodeHeader && header !== descriptionHeader) {
+        const headerStr = header.trim();
+        const dateMatch = headerStr.match(/^([a-z]{3})[a-z]*\s*[-\s/]\s*(\d{2,4})$/i);
+        
+        if (dateMatch) {
+          const monthStr = dateMatch[1].toLowerCase();
+          const yearStr = dateMatch[2];
+          
+          const monthMap: { [key: string]: number } = {
+            'jan': 0, 'feb': 1, 'mar': 2, 'apr': 3, 'may': 4, 'jun': 5,
+            'jul': 6, 'aug': 7, 'sep': 8, 'oct': 9, 'nov': 10, 'dec': 11
+          };
+          
+          const month = monthMap[monthStr];
+          if (month === undefined) return;
+          
+          let year = parseInt(yearStr);
+          if (yearStr.length === 2) {
+            year = 2000 + year;
+          }
+          
+          const quantity = parseInt(row[header], 10);
+          if (!isNaN(quantity)) {
+            const forecastDate = new Date(year, month, 1).toISOString().split('T')[0];
+            
+            forecastsToInsert.push({
+              product_code: productCode,
+              description: description,
+              forecast_date: forecastDate,
+              quantity: quantity
+            });
+          }
+        }
+      }
+    });
+  }
+  
+  // Insert data
+  logger.info(`Inserting ${forecastsToInsert.length} new forecast records from JSON...`);
+  if (forecastsToInsert.length > 0) {
+    const { error: forecastError } = await supabase.from('forecasts').insert(forecastsToInsert);
+    if (forecastError) {
+      logger.error('Supabase error inserting new forecasts', { error: forecastError });
+      throw createError('Failed to insert new forecast data.', 500);
+    }
+  }
+  
+  return {
+    success: true,
+    message: `Forecast data imported successfully. ${forecastsToInsert.length} forecast entries created.`,
+    debug: {
+      source: 'json-data',
+      productColumn: productCodeHeader,
+      descriptionColumn: descriptionHeader || 'Not found'
+    }
+  };
+}
 
 // BLOCK 3: `getForecasts` Controller (FIXED TYPE ERRORS)
 export const getForecasts = async (req: Request, res: Response) => {
