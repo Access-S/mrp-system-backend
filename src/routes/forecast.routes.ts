@@ -34,3 +34,20 @@ const validateExcelFile = (req: Request, res: Response, next: NextFunction) => {
   
   next();
 };
+
+// BLOCK 4: Router Definition and Routes
+const router = Router();
+
+router.get('/', 
+  validateQuery(forecastQuerySchema),
+  asyncHandler(getForecasts)
+);
+
+router.post('/upload', 
+  upload.single('forecastFile'),
+  validateExcelFile,
+  asyncHandler(uploadForecasts)
+);
+
+// BLOCK 5: Export Router
+export default router;
