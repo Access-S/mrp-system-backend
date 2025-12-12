@@ -215,21 +215,3 @@ export const getForecasts = async (req: Request, res: Response) => {
     });
   }
 };
-
-
-// BLOCK 4: Router Definition and Routes
-const router = Router();
-
-router.get('/', 
-  validateQuery(forecastQuerySchema),
-  asyncHandler(getForecasts)
-);
-
-// ADD validateExcelFile middleware before uploadForecasts
-router.post('/upload', 
-  upload.single('forecastFile'),
-  validateExcelFile, // ADD THIS LINE
-  asyncHandler(uploadForecasts)
-);
-
-export default router;
