@@ -1,31 +1,13 @@
 // src/controllers/forecast.controller.ts
 
-// BLOCK 1: Imports and Dependencies
-import { Router, Request, Response, NextFunction } from 'express';
-import multer from 'multer';
-import Joi from 'joi';
-import { getForecasts, uploadForecasts } from '../controllers/forecast.controller';
-import { validateQuery } from '../middleware/validation';
+// BLOCK 1: Imports
+import { Request, Response } from 'express';
+import xlsx from 'xlsx';
+import { supabase } from '../config/supabase';
 import { asyncHandler } from '../utils/asyncHandler';
-import { createError } from '../middleware/errorHandler'; // ADD THIS IMPORT
+import logger from '../utils/logger';
+import { createError } from '../middleware/errorHandler';
 
-// BLOCK 1.5: File Validation Middleware
-const validateExcelFile = (req: Request, res: Response, next: NextFunction) => {
-  if (!req.file) {
-    return next(createError('No file uploaded. Please select an Excel file.', 400));
-  }
-  
-  const fileExt = req.file.originalname.split('.').pop()?.toLowerCase();
-  if (!['xlsx', 'xls'].includes(fileExt || '')) {
-    return next(createError('Only Excel files (.xlsx, .xls) are allowed.', 400));
-  }
-  
-  if (req.file.size > 10 * 1024 * 1024) { // 10MB limit
-    return next(createError('File size must be less than 10MB.', 400));
-  }
-  
-  next();
-};
 
 // BLOCK 2: `uploadForecasts` Controller (FIXED FOR DEC-25, JAN-26 FORMAT)
 export const uploadForecasts = asyncHandler(async (req: Request, res: Response) => {
@@ -156,7 +138,7 @@ export const uploadForecasts = asyncHandler(async (req: Request, res: Response) 
   });
 });
 
-// BLOCK 3: `getForecasts` Controller (SIMPLIFIED LOGIC)
+// BLOCK 3: `getForecasts` Controller (FIXED TYPE ERRORS)
 export const getForecasts = async (req: Request, res: Response) => {
   try {
     const { months, search } = req.query;
@@ -190,7 +172,7 @@ export const getForecasts = async (req: Request, res: Response) => {
 
     // 4. Pivot the data (no change in logic here, it just works on the simpler data)
     const productData: { [key: string]: any } = {};
-    data.forEach(item => {
+    data.forEach((item: any) => {
       const { product_code, description } = item;
       const dateKey = item.forecast_date.substring(0, 7);
       if (!productData[product_code]) {
@@ -201,7 +183,7 @@ export const getForecasts = async (req: Request, res: Response) => {
     const rows = Object.values(productData);
     
     // (The rest of the function for generating headers and summary remains the same)
-    const dateHeaders = [...new Set(data.map(item => item.forecast_date.substring(0, 7)))].sort();
+    const dateHeaders = [...new Set(data.map((item: any) => item.forecast_date.substring(0, 7)))].sort();
     const staticHeaders = [{ key: 'product_code', label: 'Product Code' }, { key: 'description', label: 'Description' }];
     const dynamicHeaders = dateHeaders.map(dateKey => {
       const [year, month] = dateKey.split('-');
@@ -210,8 +192,12 @@ export const getForecasts = async (req: Request, res: Response) => {
       return { key: dateKey, label: label };
     });
     const headers = [...staticHeaders, ...dynamicHeaders];
-    const totalQuantity = data.reduce((sum, item) => sum + item.quantity, 0);
-    const summary = { /* ... */ };
+    const totalQuantity = data.reduce((sum: number, item: any) => sum + item.quantity, 0);
+    const summary = {
+      totalProducts: rows.length,
+      totalQuantity: totalQuantity,
+      dateRange: dateHeaders.length > 0 ? `${dateHeaders[0]} to ${dateHeaders[dateHeaders.length - 1]}` : 'No data'
+    };
 
     logger.info(`Successfully fetched and processed ${rows.length} forecast products.`);
     
@@ -229,6 +215,8 @@ export const getForecasts = async (req: Request, res: Response) => {
     });
   }
 };
+
+
 // BLOCK 4: Router Definition and Routes
 const router = Router();
 
