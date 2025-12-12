@@ -1,14 +1,33 @@
 // src/controllers/forecast.controller.ts
 
-// BLOCK 1: Imports
-import { Request, Response } from 'express';
-import xlsx from 'xlsx';
-import { supabase } from '../config/supabase';
+// BLOCK 1: Imports and Dependencies
+import { Router, Request, Response, NextFunction } from 'express';
+import multer from 'multer';
+import Joi from 'joi';
+import { getForecasts, uploadForecasts } from '../controllers/forecast.controller';
+import { validateQuery } from '../middleware/validation';
 import { asyncHandler } from '../utils/asyncHandler';
-import logger from '../utils/logger';
-import { createError } from '../middleware/errorHandler';
+import { createError } from '../middleware/errorHandler'; // ADD THIS IMPORT
 
-// BLOCK 2: `uploadForecasts` Controller (SIMPLIFIED LOGIC)
+// BLOCK 1.5: File Validation Middleware
+const validateExcelFile = (req: Request, res: Response, next: NextFunction) => {
+  if (!req.file) {
+    return next(createError('No file uploaded. Please select an Excel file.', 400));
+  }
+  
+  const fileExt = req.file.originalname.split('.').pop()?.toLowerCase();
+  if (!['xlsx', 'xls'].includes(fileExt || '')) {
+    return next(createError('Only Excel files (.xlsx, .xls) are allowed.', 400));
+  }
+  
+  if (req.file.size > 10 * 1024 * 1024) { // 10MB limit
+    return next(createError('File size must be less than 10MB.', 400));
+  }
+  
+  next();
+};
+
+// BLOCK 2: `uploadForecasts` Controller (FIXED FOR DEC-25, JAN-26 FORMAT)
 export const uploadForecasts = asyncHandler(async (req: Request, res: Response) => {
   if (!req.file) {
     throw createError('No file uploaded.', 400);
@@ -23,14 +42,35 @@ export const uploadForecasts = asyncHandler(async (req: Request, res: Response) 
   // (Intelligent header finding logic remains the same)
   let headerRowIndex = -1;
   let maxScore = -1;
-  for (let i = 0; i < Math.min(10, data.length); i++) { /* ... your header logic ... */ }
-  if (headerRowIndex === -1) { /* ... your error handling ... */ }
+  for (let i = 0; i < Math.min(10, data.length); i++) {
+    const row = data[i];
+    let score = 0;
+    for (const cell of row) {
+      if (typeof cell === 'string') {
+        const lower = cell.toLowerCase();
+        if (lower.includes('product') || lower.includes('desc')) score += 2;
+        if (lower.includes('jan') || lower.includes('feb') || lower.includes('mar') || 
+            lower.includes('apr') || lower.includes('may') || lower.includes('jun') ||
+            lower.includes('jul') || lower.includes('aug') || lower.includes('sep') ||
+            lower.includes('oct') || lower.includes('nov') || lower.includes('dec')) score += 1;
+      }
+    }
+    if (score > maxScore) {
+      maxScore = score;
+      headerRowIndex = i;
+    }
+  }
+  
+  if (headerRowIndex === -1) {
+    throw createError('Could not identify header row in Excel file.', 400);
+  }
+  
   const headers = data[headerRowIndex];
   const dataRows = data.slice(headerRowIndex + 1);
 
   // 2. Clear existing data from the `forecasts` table
   logger.info('Deleting existing forecast records...');
-  const { error: deleteError } = await supabase.from('forecasts').delete().neq('id', 0); // Using a non-null field
+  const { error: deleteError } = await supabase.from('forecasts').delete().neq('id', 0);
   if (deleteError) {
     logger.error('Supabase error deleting old forecasts', { error: deleteError });
     throw createError('Failed to clear old forecast data.', 500);
@@ -44,33 +84,56 @@ export const uploadForecasts = asyncHandler(async (req: Request, res: Response) 
     quantity: number 
   }[] = [];
   
-  const codeHeader = headers.find(h => h && h.toLowerCase().includes('product'));
-  const descHeader = headers.find(h => h && h.toLowerCase().includes('description'));
+  const codeHeader = headers.find(h => h && typeof h === 'string' && h.toLowerCase().includes('product'));
+  const descHeader = headers.find(h => h && typeof h === 'string' && h.toLowerCase().includes('description'));
+  
   if (!codeHeader) throw createError("A column with 'Product' in the name is required.", 400);
 
   dataRows.forEach(row => {
     const rowData: { [key: string]: any } = {};
-    headers.forEach((header, i) => { rowData[header] = row[i]; });
+    headers.forEach((header, i) => { 
+      rowData[header] = row[i]; 
+    });
     
     const productCode = rowData[codeHeader]?.toString();
     const description = rowData[descHeader]?.toString() || '';
     
-    if (productCode) {
+    if (productCode && productCode.trim() !== '') {
       headers.forEach(header => {
-        if (header && /^[A-Za-z]{3}-\d{2}$/.test(header)) {
-          const quantity = parseInt(rowData[header], 10);
-          if (!isNaN(quantity)) {
-            const [monthStr, yearStr] = header.split('-');
-            const month = new Date(Date.parse(monthStr +" 1, 2012")).getMonth();
-            const year = 2000 + parseInt(yearStr);
-            const forecastDate = new Date(year, month, 1).toISOString().split('T')[0];
+        if (header && typeof header === 'string') {
+          // FIXED: Updated regex to handle Dec-25, Jan-26 format
+          const dateMatch = header.match(/^([a-z]{3})[a-z]*\s*[-\s]\s*(\d{2,4})$/i);
+          
+          if (dateMatch) {
+            const monthStr = dateMatch[1];
+            const yearStr = dateMatch[2];
             
-            forecastsToInsert.push({
-              product_code: productCode,
-              description: description,
-              forecast_date: forecastDate,
-              quantity: quantity
-            });
+            // Parse month (handle 3-letter month abbreviations)
+            const monthMap: { [key: string]: number } = {
+              'jan': 0, 'feb': 1, 'mar': 2, 'apr': 3, 'may': 4, 'jun': 5,
+              'jul': 6, 'aug': 7, 'sep': 8, 'oct': 9, 'nov': 10, 'dec': 11
+            };
+            
+            const month = monthMap[monthStr.toLowerCase()];
+            if (month === undefined) return;
+            
+            // Parse year (handle 2-digit or 4-digit)
+            let year = parseInt(yearStr);
+            if (yearStr.length === 2) {
+              year = 2000 + year;
+            }
+            
+            const quantity = parseInt(rowData[header], 10);
+            if (!isNaN(quantity)) {
+              const forecastDate = new Date(year, month, 1).toISOString().split('T')[0];
+              
+              forecastsToInsert.push({
+                product_code: productCode.trim(),
+                description: description.trim(),
+                forecast_date: forecastDate,
+                quantity: quantity
+              });
+            }
           }
         }
       });
@@ -166,3 +229,19 @@ export const getForecasts = async (req: Request, res: Response) => {
     });
   }
 };
+// BLOCK 4: Router Definition and Routes
+const router = Router();
+
+router.get('/', 
+  validateQuery(forecastQuerySchema),
+  asyncHandler(getForecasts)
+);
+
+// ADD validateExcelFile middleware before uploadForecasts
+router.post('/upload', 
+  upload.single('forecastFile'),
+  validateExcelFile, // ADD THIS LINE
+  asyncHandler(uploadForecasts)
+);
+
+export default router;
