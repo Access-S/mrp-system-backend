@@ -188,4 +188,11 @@ export const getForecasts = async (req: Request, res: Response) => {
       message: error.message || "Failed to fetch forecast records"
     });
   }
+  };
+  
+  // BLOCK 4: Exports
+export { 
+  getForecasts, 
+  uploadForecasts 
+
 };
