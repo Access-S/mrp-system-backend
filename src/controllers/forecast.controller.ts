@@ -9,8 +9,21 @@ import logger from '../utils/logger';
 import { createError } from '../middleware/errorHandler';
 
 
-// BLOCK 2: `uploadForecasts` Controller (HANDLES FORM DATA WITH JSON)
+// BLOCK 2: `uploadForecasts` Controller (WITH DEBUG LOGGING)
 export const uploadForecasts = asyncHandler(async (req: Request, res: Response) => {
+  // ADD THESE DEBUG LOGS AT THE VERY START:
+  console.log('=== UPLOAD FORECAST START ===');
+  console.log('Request received at:', new Date().toISOString());
+  console.log('Has file:', !!req.file);
+  if (req.file) {
+    console.log('File name:', req.file.originalname);
+    console.log('File size:', req.file.size);
+    console.log('File mimetype:', req.file.mimetype);
+  }
+  console.log('Body keys:', Object.keys(req.body));
+  console.log('Content-Type header:', req.headers['content-type']);
+  console.log('=== UPLOAD FORECAST END ===');
+  
   // Log what we receive
   logger.info('Upload request received:', {
     hasFile: !!req.file,
@@ -24,6 +37,7 @@ export const uploadForecasts = asyncHandler(async (req: Request, res: Response) 
   });
 
   let jsonData: any[] = [];
+  
   
   // OPTION 1: Process if frontend sent JSON in FormData
   if (req.body.data) {
