@@ -11,9 +11,9 @@ const asyncHandler_1 = require("../utils/asyncHandler");
 const router = (0, express_1.Router)();
 // Validation schemas
 const productParamsSchema = joi_1.default.object({
-    productId: joi_1.default.string().uuid().required()
+    productCode: joi_1.default.string().required() // ✅ Changed from UUID to string
 });
 // Routes with async handling
 router.get('/', (0, asyncHandler_1.asyncHandler)(product_controller_1.getAllProducts));
-router.get('/:productId/bom', (0, validation_1.validateParams)(productParamsSchema), (0, asyncHandler_1.asyncHandler)(product_controller_1.getBomForProduct));
+router.get('/:productCode/bom', (0, validation_1.validateParams)(productParamsSchema), (0, asyncHandler_1.asyncHandler)(product_controller_1.getBomForProduct)); // ✅ Changed param name
 exports.default = router;

@@ -418,9 +418,3 @@ export const getForecasts = async (req: Request, res: Response) => {
     });
   }
 };
-
-// BLOCK 5: Exports
-export { 
-  getForecasts, 
-  uploadForecasts 
-};

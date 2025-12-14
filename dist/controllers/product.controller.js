@@ -36,26 +36,37 @@ const getAllProducts = async (req, res) => {
 exports.getAllProducts = getAllProducts;
 const getBomForProduct = async (req, res) => {
     try {
-        const { productId } = req.params;
-        logger_1.default.info('Fetching BOM for product', { productId });
-        const { data, error } = await supabase_1.supabase
+        const { productCode } = req.params; // ✅ Changed from productId to productCode
+        logger_1.default.info('Fetching BOM for product', { productCode });
+        // ✅ STEP 1: Get product by product_code to get its UUID
+        const { data: product, error: productError } = await supabase_1.supabase
+            .from('products')
+            .select('id')
+            .eq('product_code', productCode)
+            .single();
+        if (productError || !product) {
+            logger_1.default.error('Product not found', { productCode, error: productError });
+            throw (0, errorHandler_1.createError)(`Product with code ${productCode} not found`, 404);
+        }
+        // ✅ STEP 2: Get BOM components using the product UUID
+        const { data: bomComponents, error: bomError } = await supabase_1.supabase
             .from('bom_components')
             .select('*')
-            .eq('product_id', productId);
-        if (error) {
-            logger_1.default.error('Supabase error fetching BOM', { error, productId });
+            .eq('product_id', product.id);
+        if (bomError) {
+            logger_1.default.error('Supabase error fetching BOM', { error: bomError, productId: product.id });
             throw (0, errorHandler_1.createError)('Failed to fetch BOM components from database', 500);
         }
-        logger_1.default.info(`Successfully fetched ${data?.length || 0} BOM components for product ${productId}`);
+        logger_1.default.info(`Successfully fetched ${bomComponents?.length || 0} BOM components for product ${productCode}`);
         res.status(200).json({
             success: true,
-            data,
-            count: data?.length || 0,
-            productId
+            data: bomComponents || [],
+            count: bomComponents?.length || 0,
+            productCode // ✅ Return productCode instead of productId for clarity
         });
     }
     catch (error) {
-        logger_1.default.error('Error in getBomForProduct', { error: error.message, productId: req.params.productId });
+        logger_1.default.error('Error in getBomForProduct', { error: error.message, productCode: req.params.productCode });
         res.status(error.statusCode || 500).json({
             success: false,
             message: error.message || "Failed to fetch BOM components"
