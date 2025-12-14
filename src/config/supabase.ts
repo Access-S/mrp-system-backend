@@ -1,3 +1,5 @@
+//src/config/supabase.ts
+
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import logger from '../utils/logger';

@@ -20,6 +20,8 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+console.log('✅ SUPABASE_URL set:', !!process.env.SUPABASE_URL);
+console.log('✅ SUPABASE_SERVICE_KEY set:', !!process.env.SUPABASE_SERVICE_KEY);
 
 // BLOCK 2: App Configuration (RE-ORDERED)
 
