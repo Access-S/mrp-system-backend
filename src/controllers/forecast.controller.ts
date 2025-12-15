@@ -31,7 +31,7 @@ async function processJsonForecastData(jsonData: any[]): Promise<any> {
   
   // Clear existing data
   logger.info('Deleting existing forecast records...');
-  const { error: deleteError } = await supabase.from('forecasts').delete().neq('id', 0);
+  const { error: deleteError } = await supabase.from('forecasts').delete();
   if (deleteError) {
     logger.error('Supabase error deleting old forecasts', { error: deleteError });
     throw createError('Failed to clear old forecast data.', 500);
