@@ -229,7 +229,7 @@ export const uploadForecasts = asyncHandler(async (req: Request, res: Response) 
 
   // 2. Clear existing data from the `forecasts` table
   logger.info('Deleting existing forecast records...');
-  const { error: deleteError } = await supabase.from('forecasts').delete().neq('id', 0);
+  const { error: deleteError } = await supabase.from('forecasts').delete().not('id', 'is', null);
   if (deleteError) {
     logger.error('Supabase error deleting old forecasts', { error: deleteError });
     throw createError('Failed to clear old forecast data.', 500);
