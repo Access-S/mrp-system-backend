@@ -3,12 +3,9 @@
 │   ├── migrations
 │   │   └── 001_create_soh_table.sql
 │   └── schema
+│       ├── Complete MRP Schema.sql
 │       ├── functions.sql
 │       └── tables.sql
-├── package-lock.json
-├── package.json
-├── project-structure.txt
-├── railway.json
 ├── src
 │   ├── config
 │   │   └── supabase.ts
@@ -25,10 +22,16 @@
 │   │   ├── product.routes.ts
 │   │   ├── purchaseOrder.routes.ts
 │   │   └── soh.routes.ts
-│   ├── server.ts
-│   └── utils
-│       ├── asyncHandler.ts
-│       └── logger.ts
-└── tsconfig.json
+│   ├── utils
+│   │   ├── asyncHandler.ts
+│   │   └── logger.ts
+│   └── server.ts
+├── health.routes.ts
+├── package-lock.json
+├── package.json
+├── project-structure.txt
+├── render.yaml
+├── tsconfig.json
+└── update-structure.sh
 
-10 directories, 22 files
+10 directories, 25 files
