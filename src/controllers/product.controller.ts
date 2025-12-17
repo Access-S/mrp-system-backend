@@ -104,4 +104,4 @@ export const getAllProducts = async (req: Request, res: Response) => {
       message: error.message || "Failed to fetch products with BOM"
     });
   }
-};
+};// Force rebuild
