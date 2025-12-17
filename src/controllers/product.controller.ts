@@ -55,15 +55,15 @@ export const getAllProducts = async (req: Request, res: Response) => {
     products.forEach(product => {
       productMap.set(product.id, {
         id: product.id,
-        productCode: product.product_code,                    // ← snake to camel
+        productCode: product.product_code,
         description: product.description,
-        unitsPerShipper: product.units_per_shipper || 0,      // ← snake to camel
-        dailyRunRate: product.daily_run_rate || 0,            // ← snake to camel
-        hourlyRunRate: product.hourly_run_rate || 0,          // ← snake to camel
-        minsPerShipper: product.mins_per_shipper || 0,        // ← snake to camel
-        pricePerShipper: product.price_per_shipper || 0,      // ← snake to camel
-        createdAt: product.created_at,                        // ← snake to camel
-        updatedAt: product.updated_at,                        // ← snake to camel
+        unitsPerShipper: product.units_per_shipper || 0,
+        dailyRunRate: product.daily_run_rate || 0,
+        hourlyRunRate: product.hourly_run_rate || 0,
+        minsPerShipper: product.mins_per_shipper || 0,
+        pricePerShipper: product.price_per_shipper || 0,
+        createdAt: product.created_at,
+        updatedAt: product.updated_at,
         components: []
       });
     });
@@ -73,10 +73,10 @@ export const getAllProducts = async (req: Request, res: Response) => {
       const product = productMap.get(bomItem.product_id);
       if (product) {
         product.components.push({
-          partCode: bomItem.part_code,              // ← snake to camel
-          partDescription: bomItem.part_description, // ← snake to camel
-          partType: bomItem.part_type,              // ← snake to camel
-          perShipper: bomItem.per_shipper || 0      // ← snake to camel
+          partCode: bomItem.part_code,
+          partDescription: bomItem.part_description,
+          partType: bomItem.part_type,
+          perShipper: bomItem.per_shipper || 0
         });
       }
     });
@@ -85,7 +85,6 @@ export const getAllProducts = async (req: Request, res: Response) => {
 
     logger.info(`Successfully fetched ${enrichedProducts.length} products with BOM`);
     
-    // 🔍 ADD DEBUG LOG
     logger.info(`First product sample:`, {
       productCode: enrichedProducts[0]?.productCode,
       componentsCount: enrichedProducts[0]?.components?.length
@@ -104,4 +103,60 @@ export const getAllProducts = async (req: Request, res: Response) => {
       message: error.message || "Failed to fetch products with BOM"
     });
   }
-};// Force rebuild
+};
+
+// BLOCK 3: Get BOM for a Single Product
+export const getBomForProduct = async (req: Request, res: Response) => {
+  try {
+    const { productCode } = req.params;
+
+    logger.info('Fetching BOM for product', { productCode });
+
+    // Get product UUID from product_code
+    const { data: product, error: productError } = await supabase
+      .from('products')
+      .select('id')
+      .eq('product_code', productCode)
+      .single();
+
+    if (productError || !product) {
+      logger.error('Product not found', { productCode, error: productError });
+      throw createError(`Product with code ${productCode} not found`, 404);
+    }
+
+    // Fetch BOM components by product UUID
+    const { data: bomComponents, error: bomError } = await supabase
+      .from('bom_components')
+      .select('*')
+      .eq('product_id', product.id);
+
+    if (bomError) {
+      logger.error('Supabase error fetching BOM', { error: bomError, productId: product.id });
+      throw createError('Failed to fetch BOM components from database', 500);
+    }
+
+    // 🔥 Map to camelCase
+    const formattedBom = (bomComponents || []).map(bom => ({
+      partCode: bom.part_code,
+      partDescription: bom.part_description,
+      partType: bom.part_type,
+      perShipper: bom.per_shipper || 0
+    }));
+    
+    logger.info(`Successfully fetched ${formattedBom.length} BOM components for product ${productCode}`);
+    
+    res.status(200).json({
+      success: true,
+      data: formattedBom,
+      count: formattedBom.length,
+      productCode
+    });
+
+  } catch (error: any) {
+    logger.error('Error in getBomForProduct', { error: error.message, productCode: req.params.productCode });
+    res.status(error.statusCode || 500).json({ 
+      success: false,
+      message: error.message || "Failed to fetch BOM components"
+    });
+  }
+};
