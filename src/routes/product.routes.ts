@@ -1,3 +1,6 @@
+//src/routes/product.routes.ts
+
+
 import { Router } from 'express';
 import Joi from 'joi';
 import { getAllProducts, getBomForProduct } from '../controllers/product.controller';
