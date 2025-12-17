@@ -1,17 +1,26 @@
 //src/controllers/product.controller.ts
 
+// ============================================================================
 // BLOCK 1: Imports and Dependencies
+// ============================================================================
 import { Request, Response } from 'express';
 import { supabase } from '../config/supabase';
 import logger from '../utils/logger';
 import { createError } from '../middleware/errorHandler';
 
+// ============================================================================
 // BLOCK 2: Get All Products with Nested BOM Components
+// ============================================================================
+/**
+ * Fetches all products and enriches each with its BOM components.
+ * Returns data in camelCase format for frontend consumption.
+ * This is the primary endpoint used by the MRP engine.
+ */
 export const getAllProducts = async (req: Request, res: Response) => {
   try {
     logger.info('Fetching all products with BOM');
 
-    // STEP 1: Fetch all products
+    // STEP 1: Fetch all products from database
     const { data: products, error: productsError } = await supabase
       .from('products')
       .select(`
@@ -33,7 +42,7 @@ export const getAllProducts = async (req: Request, res: Response) => {
       throw createError('Failed to fetch products from database', 500);
     }
 
-    // STEP 2: Fetch all BOM components in a single query
+    // STEP 2: Fetch all BOM components in a single query for performance
     const { data: allBom, error: bomError } = await supabase
       .from('bom_components')
       .select(`
@@ -48,10 +57,9 @@ export const getAllProducts = async (req: Request, res: Response) => {
       logger.warn('Supabase error fetching BOM components (continuing without BOM)', { error: bomError });
     }
 
-    // STEP 3: Map BOM components to their parent products
+    // STEP 3: Build product map and convert to camelCase
     const productMap = new Map<string, any>();
     
-    // 🔥 UPDATED: Map to camelCase and initialize with empty components array
     products.forEach(product => {
       productMap.set(product.id, {
         id: product.id,
@@ -68,7 +76,7 @@ export const getAllProducts = async (req: Request, res: Response) => {
       });
     });
 
-    // 🔥 UPDATED: Map BOM components to camelCase
+    // STEP 4: Attach BOM components to their respective products
     (allBom || []).forEach(bomItem => {
       const product = productMap.get(bomItem.product_id);
       if (product) {
@@ -83,13 +91,9 @@ export const getAllProducts = async (req: Request, res: Response) => {
 
     const enrichedProducts = Array.from(productMap.values());
 
-    logger.info(`Successfully fetched ${enrichedProducts.length} products with BOM`);
-    
-    logger.info(`First product sample:`, {
-      productCode: enrichedProducts[0]?.productCode,
-      componentsCount: enrichedProducts[0]?.components?.length
-    });
+    logger.info(`Successfully fetched ${enrichedProducts.length} products with BOM components`);
 
+    // STEP 5: Return enriched data in standard API format
     res.status(200).json({
       success: true,
       data: enrichedProducts,
@@ -105,14 +109,20 @@ export const getAllProducts = async (req: Request, res: Response) => {
   }
 };
 
+// ============================================================================
 // BLOCK 3: Get BOM for a Single Product
+// ============================================================================
+/**
+ * Fetches BOM components for a specific product by product code.
+ * Returns data in camelCase format for frontend consumption.
+ */
 export const getBomForProduct = async (req: Request, res: Response) => {
   try {
     const { productCode } = req.params;
 
     logger.info('Fetching BOM for product', { productCode });
 
-    // Get product UUID from product_code
+    // STEP 1: Get product UUID from product_code
     const { data: product, error: productError } = await supabase
       .from('products')
       .select('id')
@@ -124,7 +134,7 @@ export const getBomForProduct = async (req: Request, res: Response) => {
       throw createError(`Product with code ${productCode} not found`, 404);
     }
 
-    // Fetch BOM components by product UUID
+    // STEP 2: Fetch BOM components by product UUID
     const { data: bomComponents, error: bomError } = await supabase
       .from('bom_components')
       .select('*')
@@ -135,7 +145,7 @@ export const getBomForProduct = async (req: Request, res: Response) => {
       throw createError('Failed to fetch BOM components from database', 500);
     }
 
-    // 🔥 Map to camelCase
+    // STEP 3: Convert to camelCase format
     const formattedBom = (bomComponents || []).map(bom => ({
       partCode: bom.part_code,
       partDescription: bom.part_description,
@@ -145,6 +155,7 @@ export const getBomForProduct = async (req: Request, res: Response) => {
     
     logger.info(`Successfully fetched ${formattedBom.length} BOM components for product ${productCode}`);
     
+    // STEP 4: Return formatted data
     res.status(200).json({
       success: true,
       data: formattedBom,
