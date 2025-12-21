@@ -171,3 +171,90 @@ export const getBomForProduct = async (req: Request, res: Response) => {
     });
   }
 };
+
+// ============================================================================
+// BLOCK 4: Create New Product
+// ============================================================================
+/**
+ * Creates a new product in the database.
+ * Returns the created product in camelCase format.
+ */
+export const createProduct = async (req: Request, res: Response) => {
+  try {
+    const {
+      productCode,
+      description,
+      unitsPerShipper,
+      dailyRunRate,
+      hourlyRunRate,
+      minsPerShipper,
+      pricePerShipper
+    } = req.body;
+
+    logger.info('Creating new product', { productCode });
+
+    // Validation
+    if (!productCode || !description) {
+      throw createError('Product code and description are required', 400);
+    }
+
+    // Check if product code already exists
+    const { data: existingProduct } = await supabase
+      .from('products')
+      .select('id')
+      .eq('product_code', productCode)
+      .single();
+
+    if (existingProduct) {
+      throw createError(`Product with code ${productCode} already exists`, 409);
+    }
+
+    // Insert new product
+    const { data: newProduct, error: insertError } = await supabase
+      .from('products')
+      .insert([{
+        product_code: productCode,
+        description: description,
+        units_per_shipper: unitsPerShipper || 0,
+        daily_run_rate: dailyRunRate || 0,
+        hourly_run_rate: hourlyRunRate || 0,
+        mins_per_shipper: minsPerShipper || 0,
+        price_per_shipper: pricePerShipper || 0
+      }])
+      .select()
+      .single();
+
+    if (insertError) {
+      logger.error('Supabase error creating product', { error: insertError });
+      throw createError('Failed to create product', 500);
+    }
+
+    logger.info('Product created successfully', { productId: newProduct.id });
+
+    // Return in camelCase format
+    res.status(201).json({
+      success: true,
+      data: {
+        id: newProduct.id,
+        productCode: newProduct.product_code,
+        description: newProduct.description,
+        unitsPerShipper: newProduct.units_per_shipper,
+        dailyRunRate: newProduct.daily_run_rate,
+        hourlyRunRate: newProduct.hourly_run_rate,
+        minsPerShipper: newProduct.mins_per_shipper,
+        pricePerShipper: newProduct.price_per_shipper,
+        createdAt: newProduct.created_at,
+        updatedAt: newProduct.updated_at,
+        components: []
+      },
+      message: 'Product created successfully'
+    });
+
+  } catch (error: any) {
+    logger.error('Error in createProduct', { error: error.message });
+    res.status(error.statusCode || 500).json({ 
+      success: false,
+      message: error.message || "Failed to create product"
+    });
+  }
+};
