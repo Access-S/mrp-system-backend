@@ -7,7 +7,7 @@ import {
   getBomForProduct,
   createProduct 
 } from '../controllers/product.controller';
-import { validateParams, validateBody } from '../middleware/validation';
+import { validateParams, validateRequest } from '../middleware/validation';
 import { asyncHandler } from '../utils/asyncHandler';
 
 const router = Router();
@@ -29,7 +29,7 @@ const createProductSchema = Joi.object({
 
 // Routes with async handling
 router.get('/', asyncHandler(getAllProducts));
-router.post('/', validateBody(createProductSchema), asyncHandler(createProduct));
+router.post('/', validateRequest(createProductSchema), asyncHandler(createProduct));
 router.get('/:productCode/bom', validateParams(productParamsSchema), asyncHandler(getBomForProduct));
 
 export default router;
