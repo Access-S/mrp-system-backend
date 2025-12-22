@@ -342,3 +342,55 @@ export const updateProduct = async (req: Request, res: Response) => {
     });
   }
 };
+
+// ============================================================================
+// BLOCK 6: Delete Product
+// ============================================================================
+/**
+ * Deletes a product by product code.
+ * Also deletes associated BOM components (cascade).
+ */
+export const deleteProduct = async (req: Request, res: Response) => {
+  try {
+    const { productCode } = req.params;
+
+    logger.info('Deleting product', { productCode });
+
+    // Get product UUID from product_code
+    const { data: product, error: productError } = await supabase
+      .from('products')
+      .select('id')
+      .eq('product_code', productCode)
+      .single();
+
+    if (productError || !product) {
+      logger.error('Product not found', { productCode, error: productError });
+      throw createError(`Product with code ${productCode} not found`, 404);
+    }
+
+    // Delete product (BOM components should cascade delete if foreign key is set up)
+    const { error: deleteError } = await supabase
+      .from('products')
+      .delete()
+      .eq('id', product.id);
+
+    if (deleteError) {
+      logger.error('Supabase error deleting product', { error: deleteError });
+      throw createError('Failed to delete product', 500);
+    }
+
+    logger.info('Product deleted successfully', { productCode });
+
+    res.status(200).json({
+      success: true,
+      message: `Product ${productCode} deleted successfully`
+    });
+
+  } catch (error: any) {
+    logger.error('Error in deleteProduct', { error: error.message });
+    res.status(error.statusCode || 500).json({ 
+      success: false,
+      message: error.message || "Failed to delete product"
+    });
+  }
+};
