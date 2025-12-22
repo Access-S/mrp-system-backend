@@ -8,6 +8,7 @@ import productRoutes from './routes/product.routes';
 import purchaseOrderRoutes from './routes/purchaseOrder.routes';
 import sohRoutes from './routes/soh.routes';
 import forecastRoutes from './routes/forecast.routes';
+import bomRoutes from './routes/bom.routes';
 
 // Import middleware
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
@@ -32,7 +33,7 @@ const allowedOrigins = [
   'https://localhost:5173',
   'https://animated-space-lamp-r4xxrp67wq4r3pq6-5173.app.github.dev',
   'https://mrp-frontend.onrender.com',
-  'https://mrp-frontend-gceq.onrender.com',  // ✅ ADD YOUR EXACT FRONTEND URL
+  'https://mrp-frontend-gceq.onrender.com',
   'https://*.onrender.com',
   'https://bug-free-sniffle-69ppr45vwq5jf5wr.github.dev/'
 ];
@@ -45,7 +46,7 @@ app.use(cors({
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.log('CORS blocked origin:', origin); // ✅ Add logging
+      console.log('CORS blocked origin:', origin);
       callback(new Error('This origin is not allowed by CORS'));
     }
   },
@@ -93,6 +94,7 @@ app.get('/api/health', (req, res) => {
 
 // BLOCK 4: API Routes
 app.use('/api/products', productRoutes);
+app.use('/api/products', bomRoutes);
 app.use('/api/purchase-orders', purchaseOrderRoutes);
 app.use('/api/soh', sohRoutes);
 app.use('/api/forecasts', forecastRoutes);
