@@ -258,3 +258,87 @@ export const createProduct = async (req: Request, res: Response) => {
     });
   }
 };
+
+// ============================================================================
+// BLOCK 5: Update Existing Product
+// ============================================================================
+/**
+ * Updates an existing product by product code.
+ * Returns the updated product in camelCase format.
+ */
+export const updateProduct = async (req: Request, res: Response) => {
+  try {
+    const { productCode } = req.params;
+    const {
+      description,
+      unitsPerShipper,
+      dailyRunRate,
+      hourlyRunRate,
+      minsPerShipper,
+      pricePerShipper
+    } = req.body;
+
+    logger.info('Updating product', { productCode });
+
+    // Get product UUID from product_code
+    const { data: product, error: productError } = await supabase
+      .from('products')
+      .select('id')
+      .eq('product_code', productCode)
+      .single();
+
+    if (productError || !product) {
+      logger.error('Product not found', { productCode, error: productError });
+      throw createError(`Product with code ${productCode} not found`, 404);
+    }
+
+    // Update product
+    const updateData: any = { updated_at: new Date().toISOString() };
+    
+    if (description !== undefined) updateData.description = description;
+    if (unitsPerShipper !== undefined) updateData.units_per_shipper = unitsPerShipper;
+    if (dailyRunRate !== undefined) updateData.daily_run_rate = dailyRunRate;
+    if (hourlyRunRate !== undefined) updateData.hourly_run_rate = hourlyRunRate;
+    if (minsPerShipper !== undefined) updateData.mins_per_shipper = minsPerShipper;
+    if (pricePerShipper !== undefined) updateData.price_per_shipper = pricePerShipper;
+
+    const { data: updatedProduct, error: updateError } = await supabase
+      .from('products')
+      .update(updateData)
+      .eq('id', product.id)
+      .select()
+      .single();
+
+    if (updateError) {
+      logger.error('Supabase error updating product', { error: updateError });
+      throw createError('Failed to update product', 500);
+    }
+
+    logger.info('Product updated successfully', { productCode });
+
+    // Return in camelCase format
+    res.status(200).json({
+      success: true,
+      data: {
+        id: updatedProduct.id,
+        productCode: updatedProduct.product_code,
+        description: updatedProduct.description,
+        unitsPerShipper: updatedProduct.units_per_shipper,
+        dailyRunRate: updatedProduct.daily_run_rate,
+        hourlyRunRate: updatedProduct.hourly_run_rate,
+        minsPerShipper: updatedProduct.mins_per_shipper,
+        pricePerShipper: updatedProduct.price_per_shipper,
+        createdAt: updatedProduct.created_at,
+        updatedAt: updatedProduct.updated_at
+      },
+      message: 'Product updated successfully'
+    });
+
+  } catch (error: any) {
+    logger.error('Error in updateProduct', { error: error.message });
+    res.status(error.statusCode || 500).json({ 
+      success: false,
+      message: error.message || "Failed to update product"
+    });
+  }
+};

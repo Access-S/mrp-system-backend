@@ -5,7 +5,8 @@ import Joi from 'joi';
 import { 
   getAllProducts, 
   getBomForProduct,
-  createProduct 
+  createProduct,
+  updateProduct  // ✅ Add this
 } from '../controllers/product.controller';
 import { validateParams, validateRequest } from '../middleware/validation';
 import { asyncHandler } from '../utils/asyncHandler';
@@ -27,9 +28,19 @@ const createProductSchema = Joi.object({
   pricePerShipper: Joi.number().min(0).default(0)
 });
 
+const updateProductSchema = Joi.object({
+  description: Joi.string().optional(),
+  unitsPerShipper: Joi.number().min(0).optional(),
+  dailyRunRate: Joi.number().min(0).optional(),
+  hourlyRunRate: Joi.number().min(0).optional(),
+  minsPerShipper: Joi.number().min(0).optional(),
+  pricePerShipper: Joi.number().min(0).optional()
+});
+
 // Routes with async handling
 router.get('/', asyncHandler(getAllProducts));
 router.post('/', validateRequest(createProductSchema), asyncHandler(createProduct));
+router.patch('/:productCode', validateParams(productParamsSchema), validateRequest(updateProductSchema), asyncHandler(updateProduct));  // ✅ Add this
 router.get('/:productCode/bom', validateParams(productParamsSchema), asyncHandler(getBomForProduct));
 
 export default router;
