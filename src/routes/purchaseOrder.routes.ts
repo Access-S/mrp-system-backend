@@ -38,7 +38,19 @@ const updatePoSchema = Joi.object({
 });
 
 const statusUpdateSchema = Joi.object({
-  status: Joi.string().valid('Open', 'In Progress', 'Completed', 'Cancelled').required()
+  status: Joi.string().valid(
+    'Open',
+    'Wip Called',
+    'Packaging Called',
+    'PO Check',
+    'In WH Ready',
+    'In Production',
+    'Awaiting QA Release',
+    'Ready for Despatch',
+    'Despatched/ Completed',
+    'Closed',
+    'PO Canceled'
+  ).required()
 });
 
 const querySchema = Joi.object({
