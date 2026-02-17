@@ -22,11 +22,5 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Debug
-*.pem
-
-# Optional npm cache
-.npm
-
 # TypeScript cache
 *.tsbuildinfo
