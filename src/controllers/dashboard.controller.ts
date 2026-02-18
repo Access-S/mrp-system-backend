@@ -30,7 +30,8 @@ interface POStatusDistribution {
 
 interface MonthlyTrend {
   month: string;
-  orderCount: number;
+  ordersReceived: number;
+  ordersDespatched: number;
   revenue: number;
 }
 
@@ -322,33 +323,58 @@ async function fetchStatusDistribution(): Promise<POStatusDistribution[]> {
 }
 
 // ============================================================================
-// BLOCK 7: Monthly Trends (Last 6 Months)
+// BLOCK 7: Monthly Trends (Last 6 Months) - Orders Received vs Despatched
 // ============================================================================
 async function fetchMonthlyTrends(): Promise<MonthlyTrend[]> {
   try {
     const sixMonthsAgo = getMonthStart(6);
 
+    // Fetch all POs from last 6 months
     const { data, error } = await supabase
       .from('purchase_orders')
-      .select('po_received_date, customer_amount')
-      .gte('po_received_date', sixMonthsAgo)
+      .select('po_received_date, delivery_date, customer_amount, current_status')
+      .or(`po_received_date.gte.${sixMonthsAgo},delivery_date.gte.${sixMonthsAgo}`)
       .order('po_received_date', { ascending: true });
 
     if (error) throw error;
 
-    const monthlyMap = new Map<string, { count: number; revenue: number }>();
+    // Track both received and despatched per month
+    const monthlyMap = new Map<string, { 
+      received: number; 
+      despatched: number; 
+      revenue: number 
+    }>();
+
+    // Initialize last 6 months
+    for (let i = 5; i >= 0; i--) {
+      const date = new Date();
+      date.setMonth(date.getMonth() - i);
+      const monthKey = date.toISOString().substring(0, 7);
+      monthlyMap.set(monthKey, { received: 0, despatched: 0, revenue: 0 });
+    }
 
     (data || []).forEach((po: any) => {
+      // Count RECEIVED orders by po_received_date
       if (po.po_received_date) {
-        const monthKey = po.po_received_date.substring(0, 7); // "YYYY-MM"
-        const value = po.customer_amount || 0;
+        const receivedMonthKey = po.po_received_date.substring(0, 7);
+        if (monthlyMap.has(receivedMonthKey)) {
+          const existing = monthlyMap.get(receivedMonthKey)!;
+          existing.received++;
+        }
+      }
 
-        if (monthlyMap.has(monthKey)) {
-          const existing = monthlyMap.get(monthKey)!;
-          existing.count++;
-          existing.revenue += value;
-        } else {
-          monthlyMap.set(monthKey, { count: 1, revenue: value });
+      // Count DESPATCHED orders by delivery_date (only completed orders)
+      const status = po.current_status || '';
+      const isCompleted = status.includes('Despatched') || 
+                          status.includes('Completed') || 
+                          status === 'Closed';
+
+      if (po.delivery_date && isCompleted) {
+        const deliveryMonthKey = po.delivery_date.substring(0, 7);
+        if (monthlyMap.has(deliveryMonthKey)) {
+          const existing = monthlyMap.get(deliveryMonthKey)!;
+          existing.despatched++;
+          existing.revenue += po.customer_amount || 0;
         }
       }
     });
@@ -357,7 +383,8 @@ async function fetchMonthlyTrends(): Promise<MonthlyTrend[]> {
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([month, data]) => ({
         month: formatMonth(month + '-01'),
-        orderCount: data.count,
+        ordersReceived: data.received,
+        ordersDespatched: data.despatched,
         revenue: Math.round(data.revenue * 100) / 100
       }));
 
