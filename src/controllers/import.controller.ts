@@ -213,20 +213,12 @@ export const bulkImportPurchaseOrders = async (req: Request, res: Response) => {
         const systemAmount = Math.round(orderedQtyShippers * (product.price_per_shipper || 0) * 100) / 100;
         const customerAmount = Number(row.customer_amount) || 0;
 
-                // Determine status
+                // Determine status - use exact value from Excel, default to 'Open'
                 let currentStatus = row.status?.trim() || 'Open';
 
-                // Normalize status to match app's exact status values
-                const statusLower = currentStatus.toLowerCase();
-
-                if (statusLower.includes('complete') || statusLower.includes('despatch')) {
-                currentStatus = 'Despatched/ Completed';
-                } else if (statusLower.includes('cancel')) {
-                currentStatus = 'PO Canceled';
-                } else if (statusLower.includes('wip')) {
-                currentStatus = 'Wip Called';
-                } else if (statusLower === 'open') {
-                currentStatus = 'Open';
+                // Check for PO Check status (amount mismatch > $5) - only for Open orders
+                if (currentStatus === 'Open' && Math.abs(customerAmount - systemAmount) > 5) {
+                currentStatus = 'PO Check';
                 }
 
         // Check for PO Check status (amount mismatch > $5)
