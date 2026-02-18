@@ -68,6 +68,8 @@ interface RecentActivity {
 interface DashboardData {
   kpis: DashboardKPIs;
   poStatusDistribution: POStatusDistribution[];
+  completedOrdersTotal: number;
+  activeOrdersTotal: number;
   monthlyTrends: MonthlyTrend[];
   topCustomers: TopCustomer[];
   topProducts: TopProduct[];
@@ -80,7 +82,6 @@ interface DashboardData {
   };
   lastUpdated: string;
 }
-
 // ============================================================================
 // BLOCK 3: Helper Functions
 // ============================================================================
@@ -133,17 +134,19 @@ export const getDashboardData = async (req: Request, res: Response) => {
       fetchForecastSummary()
     ]);
 
-    const dashboardData: DashboardData = {
-      kpis: kpisResult,
-      poStatusDistribution: statusDistributionResult,
-      monthlyTrends: monthlyTrendsResult,
-      topCustomers: topCustomersResult,
-      topProducts: topProductsResult,
-      lowStockAlerts: lowStockResult,
-      recentActivity: recentActivityResult,
-      forecastSummary: forecastSummaryResult,
-      lastUpdated: new Date().toISOString()
-    };
+        const dashboardData: DashboardData = {
+          kpis: kpisResult,
+          poStatusDistribution: statusDistributionResult.activeStatuses,
+          completedOrdersTotal: statusDistributionResult.completedTotal,
+          activeOrdersTotal: statusDistributionResult.activeTotal,
+          monthlyTrends: monthlyTrendsResult,
+          topCustomers: topCustomersResult,
+          topProducts: topProductsResult,
+          lowStockAlerts: lowStockResult,
+          recentActivity: recentActivityResult,
+          forecastSummary: forecastSummaryResult,
+          lastUpdated: new Date().toISOString()
+        };
 
     const duration = Date.now() - startTime;
     logger.info(`✅ Dashboard data fetched in ${duration}ms`);
@@ -280,45 +283,59 @@ async function fetchKPIs(): Promise<DashboardKPIs> {
 }
 
 // ============================================================================
-// BLOCK 6: PO Status Distribution
+// BLOCK 6: PO Status Distribution (Active Only) + Completed Total
 // ============================================================================
-async function fetchStatusDistribution(): Promise<POStatusDistribution[]> {
+async function fetchStatusDistribution(): Promise<{ 
+  activeStatuses: POStatusDistribution[]; 
+  completedTotal: number;
+  activeTotal: number;
+}> {
   try {
     const { data, error } = await supabase
       .from('purchase_orders')
-      .select(`
-        id,
-        customer_amount,
-        statuses:po_status_history(status)
-      `);
+      .select('current_status, customer_amount');
 
     if (error) throw error;
 
     const statusMap = new Map<string, { count: number; value: number }>();
+    let completedTotal = 0;
+    let activeTotal = 0;
 
     (data || []).forEach((po: any) => {
-      const statuses = po.statuses?.map((s: any) => s.status) || ['Open'];
-      const primaryStatus = statuses[statuses.length - 1] || 'Open';
+      const status = po.current_status || 'Open';
       const value = po.customer_amount || 0;
 
-      if (statusMap.has(primaryStatus)) {
-        const existing = statusMap.get(primaryStatus)!;
-        existing.count++;
-        existing.value += value;
+      // Count completed/despatched orders separately
+      if (status.includes('Despatched') || status.includes('Completed') || status === 'Closed') {
+        completedTotal++;
       } else {
-        statusMap.set(primaryStatus, { count: 1, value });
+        // Track active statuses
+        activeTotal++;
+        if (statusMap.has(status)) {
+          const existing = statusMap.get(status)!;
+          existing.count++;
+          existing.value += value;
+        } else {
+          statusMap.set(status, { count: 1, value });
+        }
       }
     });
 
-    return Array.from(statusMap.entries()).map(([status, data]) => ({
-      status,
-      count: data.count,
-      value: Math.round(data.value * 100) / 100
-    }));
+    // Convert to array and filter out zero counts
+    const activeStatuses = Array.from(statusMap.entries())
+      .filter(([_, data]) => data.count > 0)
+      .map(([status, data]) => ({
+        status,
+        count: data.count,
+        value: Math.round(data.value * 100) / 100
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    return { activeStatuses, completedTotal, activeTotal };
 
   } catch (error) {
     logger.error('Error in fetchStatusDistribution', { error });
-    return [];
+    return { activeStatuses: [], completedTotal: 0, activeTotal: 0 };
   }
 }
 
