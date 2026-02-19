@@ -118,12 +118,166 @@ const formatMonth = (dateStr: string): string => {
 };
 
 // ============================================================================
+// BLOCK 3.5: Date Range Helpers
+// ============================================================================
+
+interface DateRange {
+  start: Date;
+  end: Date;
+  points: number;
+  interval: 'hour' | 'day' | 'week' | 'month';
+}
+
+function getFinancialYearStart(date: Date): Date {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  
+  if (month >= 6) { // Jul-Dec
+    return new Date(year, 6, 1); // Jul 1 this year
+  } else { // Jan-Jun
+    return new Date(year - 1, 6, 1); // Jul 1 last year
+  }
+}
+
+function getFinancialYearEnd(date: Date): Date {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  
+  if (month >= 6) { // Jul-Dec
+    return new Date(year + 1, 5, 30); // Jun 30 next year
+  } else { // Jan-Jun
+    return new Date(year, 5, 30); // Jun 30 this year
+  }
+}
+
+function getDateRange(timeRange: string): DateRange {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  
+  switch (timeRange) {
+    case 'today':
+      return {
+        start: today,
+        end: now,
+        points: 24,
+        interval: 'hour'
+      };
+    
+    case 'this_week': {
+      const dayOfWeek = today.getDay();
+      const monday = new Date(today);
+      monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+      return {
+        start: monday,
+        end: now,
+        points: 7,
+        interval: 'day'
+      };
+    }
+    
+    case 'last_week': {
+      const dayOfWeek = today.getDay();
+      const lastMonday = new Date(today);
+      lastMonday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1) - 7);
+      const lastSunday = new Date(lastMonday);
+      lastSunday.setDate(lastMonday.getDate() + 6);
+      return {
+        start: lastMonday,
+        end: lastSunday,
+        points: 7,
+        interval: 'day'
+      };
+    }
+    
+    case 'this_month': {
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      return {
+        start: monthStart,
+        end: now,
+        points: now.getDate(),
+        interval: 'day'
+      };
+    }
+    
+    case 'last_month': {
+      const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+      return {
+        start: lastMonthStart,
+        end: lastMonthEnd,
+        points: lastMonthEnd.getDate(),
+        interval: 'day'
+      };
+    }
+    
+    case 'last_3_months': {
+      const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
+      return {
+        start: threeMonthsAgo,
+        end: now,
+        points: 12,
+        interval: 'week'
+      };
+    }
+    
+    case 'last_6_months': {
+      const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+      return {
+        start: sixMonthsAgo,
+        end: now,
+        points: 6,
+        interval: 'month'
+      };
+    }
+    
+    case 'this_fy': {
+      return {
+        start: getFinancialYearStart(now),
+        end: now,
+        points: 12,
+        interval: 'month'
+      };
+    }
+    
+    case 'last_fy': {
+      const lastFYStart = new Date(getFinancialYearStart(now));
+      lastFYStart.setFullYear(lastFYStart.getFullYear() - 1);
+      const lastFYEnd = new Date(getFinancialYearEnd(now));
+      lastFYEnd.setFullYear(lastFYEnd.getFullYear() - 1);
+      return {
+        start: lastFYStart,
+        end: lastFYEnd,
+        points: 12,
+        interval: 'month'
+      };
+    }
+    
+    default: // Default to last 6 months
+      const defaultStart = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+      return {
+        start: defaultStart,
+        end: now,
+        points: 6,
+        interval: 'month'
+      };
+  }
+}
+
+function formatDateForQuery(date: Date): string {
+  return date.toISOString().split('T')[0];
+}
+
+// ============================================================================
 // BLOCK 4: Main Dashboard Data Endpoint
 // ============================================================================
 export const getDashboardData = async (req: Request, res: Response) => {
   try {
     const startTime = Date.now();
-    logger.info('📊 Fetching dashboard data...');
+    const timeRange = (req.query.timeRange as string) || 'last_6_months';
+    
+    logger.info(`📊 Fetching dashboard data for timeRange: ${timeRange}`);
+
+    const dateRange = getDateRange(timeRange);
 
     // Run all queries in parallel for maximum performance
     const [
@@ -136,29 +290,34 @@ export const getDashboardData = async (req: Request, res: Response) => {
       recentActivityResult,
       forecastSummaryResult
     ] = await Promise.all([
-      fetchKPIs(),
-      fetchStatusDistribution(),
-      fetchMonthlyTrends(),
-      fetchTopCustomers(),
-      fetchTopProducts(),
+      fetchKPIs(dateRange),
+      fetchStatusDistribution(dateRange),
+      fetchMonthlyTrends(dateRange),
+      fetchTopCustomers(dateRange),
+      fetchTopProducts(dateRange),
       fetchLowStockAlerts(),
       fetchRecentActivity(),
       fetchForecastSummary()
     ]);
 
-        const dashboardData: DashboardData = {
-          kpis: kpisResult,
-          poStatusDistribution: statusDistributionResult.activeStatuses,
-          completedOrdersTotal: statusDistributionResult.completedTotal,
-          activeOrdersTotal: statusDistributionResult.activeTotal,
-          monthlyTrends: monthlyTrendsResult,
-          topCustomers: topCustomersResult,
-          topProducts: topProductsResult,
-          lowStockAlerts: lowStockResult,
-          recentActivity: recentActivityResult,
-          forecastSummary: forecastSummaryResult,
-          lastUpdated: new Date().toISOString()
-        };
+    const dashboardData = {
+      kpis: kpisResult,
+      poStatusDistribution: statusDistributionResult.activeStatuses,
+      completedOrdersTotal: statusDistributionResult.completedTotal,
+      activeOrdersTotal: statusDistributionResult.activeTotal,
+      monthlyTrends: monthlyTrendsResult,
+      topCustomers: topCustomersResult,
+      topProducts: topProductsResult,
+      lowStockAlerts: lowStockResult,
+      recentActivity: recentActivityResult,
+      forecastSummary: forecastSummaryResult,
+      lastUpdated: new Date().toISOString(),
+      timeRange: timeRange,
+      dateRange: {
+        start: formatDateForQuery(dateRange.start),
+        end: formatDateForQuery(dateRange.end)
+      }
+    };
 
     const duration = Date.now() - startTime;
     logger.info(`✅ Dashboard data fetched in ${duration}ms`);
@@ -182,11 +341,14 @@ export const getDashboardData = async (req: Request, res: Response) => {
 };
 
 // ============================================================================
-// BLOCK 5: KPIs Calculation with Trends
+// BLOCK 5: KPIs Calculation with Trends (Updated with DateRange)
 // ============================================================================
-async function fetchKPIs(): Promise<DashboardKPIs> {
+async function fetchKPIs(dateRange: DateRange): Promise<DashboardKPIs> {
   try {
-    // Fetch all POs with their statuses and product info
+    const startDate = formatDateForQuery(dateRange.start);
+    const endDate = formatDateForQuery(dateRange.end);
+
+    // Fetch POs within date range
     const { data: allPOs, error: poError } = await supabase
       .from('purchase_orders')
       .select(`
@@ -199,39 +361,33 @@ async function fetchKPIs(): Promise<DashboardKPIs> {
         current_status,
         created_at,
         product:products(mins_per_shipper)
-      `);
+      `)
+      .gte('po_received_date', startDate)
+      .lte('po_received_date', endDate);
 
     if (poError) {
       logger.error('Error fetching POs for KPIs', { error: poError });
       throw poError;
     }
 
-    // Fetch components at risk
-    const { data: sohData, error: sohError } = await supabase
+    // Fetch components at risk (not date filtered - current state)
+    const { data: sohData } = await supabase
       .from('soh')
       .select('stock_on_hand');
 
-    // Current KPIs
+    // Initialize counters
     let totalOpenOrders = 0;
     let totalOpenValue = 0;
     let totalOpenWorkHours = 0;
     let ordersRequiringAttention = 0;
-    let completedThisMonth = 0;
-    let revenueThisMonth = 0;
+    let completedInRange = 0;
+    let revenueInRange = 0;
     let totalTurnaroundDays = 0;
     let completedCount = 0;
 
-    const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-
-    // Track last 6 months data for sparklines
-    const last6Months: string[] = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      last6Months.push(d.toISOString().substring(0, 7));
-    }
-
-    const monthlyData: { [key: string]: {
+    // Generate time buckets based on interval
+    const timeBuckets = generateTimeBuckets(dateRange);
+    const bucketData: { [key: string]: {
       openOrders: number;
       openValue: number;
       workHours: number;
@@ -242,8 +398,8 @@ async function fetchKPIs(): Promise<DashboardKPIs> {
       turnaroundCount: number;
     }} = {};
 
-    last6Months.forEach(m => {
-      monthlyData[m] = {
+    timeBuckets.forEach(bucket => {
+      bucketData[bucket] = {
         openOrders: 0,
         openValue: 0,
         workHours: 0,
@@ -264,32 +420,27 @@ async function fetchKPIs(): Promise<DashboardKPIs> {
       const workHours = ((po.ordered_qty_shippers || 0) * minsPerShipper) / 60;
       const orderValue = po.customer_amount || po.system_amount || 0;
 
-      // Get month key from received date or delivery date
-      const receivedMonth = po.po_received_date?.substring(0, 7);
-      const deliveryMonth = po.delivery_date?.substring(0, 7);
+      // Get bucket key
+      const receivedBucket = getBucketKey(po.po_received_date, dateRange.interval);
+      const deliveryBucket = po.delivery_date ? getBucketKey(po.delivery_date, dateRange.interval) : null;
 
       if (!isCompleted) {
         totalOpenOrders++;
         totalOpenValue += orderValue;
         totalOpenWorkHours += workHours;
 
-        // Track by received month
-        if (receivedMonth && monthlyData[receivedMonth]) {
-          monthlyData[receivedMonth].openOrders++;
-          monthlyData[receivedMonth].openValue += orderValue;
-          monthlyData[receivedMonth].workHours += workHours;
+        if (receivedBucket && bucketData[receivedBucket]) {
+          bucketData[receivedBucket].openOrders++;
+          bucketData[receivedBucket].openValue += orderValue;
+          bucketData[receivedBucket].workHours += workHours;
         }
       } else {
-        // Completed orders
-        if (deliveryMonth && monthlyData[deliveryMonth]) {
-          monthlyData[deliveryMonth].completed++;
-          monthlyData[deliveryMonth].revenue += orderValue;
-        }
+        completedInRange++;
+        revenueInRange += orderValue;
 
-        // This month completed
-        if (po.delivery_date && new Date(po.delivery_date) >= monthStart) {
-          completedThisMonth++;
-          revenueThisMonth += orderValue;
+        if (deliveryBucket && bucketData[deliveryBucket]) {
+          bucketData[deliveryBucket].completed++;
+          bucketData[deliveryBucket].revenue += orderValue;
         }
 
         // Turnaround calculation
@@ -301,9 +452,9 @@ async function fetchKPIs(): Promise<DashboardKPIs> {
             totalTurnaroundDays += days;
             completedCount++;
 
-            if (deliveryMonth && monthlyData[deliveryMonth]) {
-              monthlyData[deliveryMonth].turnaroundTotal += days;
-              monthlyData[deliveryMonth].turnaroundCount++;
+            if (deliveryBucket && bucketData[deliveryBucket]) {
+              bucketData[deliveryBucket].turnaroundTotal += days;
+              bucketData[deliveryBucket].turnaroundCount++;
             }
           }
         }
@@ -311,8 +462,8 @@ async function fetchKPIs(): Promise<DashboardKPIs> {
 
       if (needsAttention) {
         ordersRequiringAttention++;
-        if (receivedMonth && monthlyData[receivedMonth]) {
-          monthlyData[receivedMonth].attention++;
+        if (receivedBucket && bucketData[receivedBucket]) {
+          bucketData[receivedBucket].attention++;
         }
       }
     });
@@ -322,21 +473,21 @@ async function fetchKPIs(): Promise<DashboardKPIs> {
       (item: any) => (item.stock_on_hand || 0) < 100
     ).length;
 
-    // Build sparkline arrays
+    // Build sparkline arrays from buckets
     const trends = {
-      openOrders: last6Months.map(m => monthlyData[m]?.openOrders || 0),
-      openValue: last6Months.map(m => Math.round(monthlyData[m]?.openValue || 0)),
-      workHours: last6Months.map(m => Math.round((monthlyData[m]?.workHours || 0) * 10) / 10),
-      attentionRequired: last6Months.map(m => monthlyData[m]?.attention || 0),
-      componentsAtRisk: last6Months.map(() => componentsAtRisk), // Static for now
-      turnaroundDays: last6Months.map(m => {
-        const data = monthlyData[m];
+      openOrders: timeBuckets.map(b => bucketData[b]?.openOrders || 0),
+      openValue: timeBuckets.map(b => Math.round(bucketData[b]?.openValue || 0)),
+      workHours: timeBuckets.map(b => Math.round((bucketData[b]?.workHours || 0) * 10) / 10),
+      attentionRequired: timeBuckets.map(b => bucketData[b]?.attention || 0),
+      componentsAtRisk: timeBuckets.map(() => componentsAtRisk),
+      turnaroundDays: timeBuckets.map(b => {
+        const data = bucketData[b];
         return data && data.turnaroundCount > 0 
           ? Math.round((data.turnaroundTotal / data.turnaroundCount) * 10) / 10 
           : 0;
       }),
-      completedMonthly: last6Months.map(m => monthlyData[m]?.completed || 0),
-      revenueMonthly: last6Months.map(m => Math.round(monthlyData[m]?.revenue || 0)),
+      completedMonthly: timeBuckets.map(b => bucketData[b]?.completed || 0),
+      revenueMonthly: timeBuckets.map(b => Math.round(bucketData[b]?.revenue || 0)),
     };
 
     return {
@@ -348,8 +499,8 @@ async function fetchKPIs(): Promise<DashboardKPIs> {
       averageTurnaroundDays: completedCount > 0 
         ? Math.round((totalTurnaroundDays / completedCount) * 10) / 10 
         : 0,
-      completedThisMonth,
-      revenueThisMonth: Math.round(revenueThisMonth * 100) / 100,
+      completedThisMonth: completedInRange,
+      revenueThisMonth: Math.round(revenueInRange * 100) / 100,
       trends
     };
 
@@ -375,6 +526,54 @@ async function fetchKPIs(): Promise<DashboardKPIs> {
         revenueMonthly: [],
       }
     };
+  }
+}
+
+// Helper: Generate time buckets
+function generateTimeBuckets(dateRange: DateRange): string[] {
+  const buckets: string[] = [];
+  const current = new Date(dateRange.start);
+  
+  while (current <= dateRange.end) {
+    buckets.push(getBucketKey(current.toISOString(), dateRange.interval));
+    
+    switch (dateRange.interval) {
+      case 'hour':
+        current.setHours(current.getHours() + 1);
+        break;
+      case 'day':
+        current.setDate(current.getDate() + 1);
+        break;
+      case 'week':
+        current.setDate(current.getDate() + 7);
+        break;
+      case 'month':
+        current.setMonth(current.getMonth() + 1);
+        break;
+    }
+  }
+  
+  return buckets.slice(0, dateRange.points);
+}
+
+// Helper: Get bucket key from date
+function getBucketKey(dateStr: string, interval: 'hour' | 'day' | 'week' | 'month'): string {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  
+  switch (interval) {
+    case 'hour':
+      return `${date.toISOString().substring(0, 13)}:00`;
+    case 'day':
+      return date.toISOString().substring(0, 10);
+    case 'week':
+      const weekStart = new Date(date);
+      weekStart.setDate(date.getDate() - date.getDay());
+      return weekStart.toISOString().substring(0, 10);
+    case 'month':
+      return date.toISOString().substring(0, 7);
+    default:
+      return date.toISOString().substring(0, 10);
   }
 }
 
