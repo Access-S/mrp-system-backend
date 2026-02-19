@@ -11,6 +11,7 @@ import { createError } from '../middleware/errorHandler';
 // ============================================================================
 // BLOCK 2: Interfaces
 // ============================================================================
+
 interface DashboardKPIs {
   totalOpenOrders: number;
   totalOpenValue: number;
@@ -20,6 +21,17 @@ interface DashboardKPIs {
   averageTurnaroundDays: number;
   completedThisMonth: number;
   revenueThisMonth: number;
+  // Add sparkline data
+  trends: {
+    openOrders: number[];
+    openValue: number[];
+    workHours: number[];
+    attentionRequired: number[];
+    componentsAtRisk: number[];
+    turnaroundDays: number[];
+    completedMonthly: number[];
+    revenueMonthly: number[];
+  };
 }
 
 interface POStatusDistribution {
@@ -170,7 +182,7 @@ export const getDashboardData = async (req: Request, res: Response) => {
 };
 
 // ============================================================================
-// BLOCK 5: KPIs Calculation
+// BLOCK 5: KPIs Calculation with Trends
 // ============================================================================
 async function fetchKPIs(): Promise<DashboardKPIs> {
   try {
@@ -184,8 +196,9 @@ async function fetchKPIs(): Promise<DashboardKPIs> {
         ordered_qty_shippers,
         po_received_date,
         delivery_date,
-        product:products(mins_per_shipper),
-        statuses:po_status_history(status)
+        current_status,
+        created_at,
+        product:products(mins_per_shipper)
       `);
 
     if (poError) {
@@ -198,6 +211,7 @@ async function fetchKPIs(): Promise<DashboardKPIs> {
       .from('soh')
       .select('stock_on_hand');
 
+    // Current KPIs
     let totalOpenOrders = 0;
     let totalOpenValue = 0;
     let totalOpenWorkHours = 0;
@@ -207,25 +221,78 @@ async function fetchKPIs(): Promise<DashboardKPIs> {
     let totalTurnaroundDays = 0;
     let completedCount = 0;
 
-    const monthStart = getMonthStart(0);
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // Track last 6 months data for sparklines
+    const last6Months: string[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      last6Months.push(d.toISOString().substring(0, 7));
+    }
+
+    const monthlyData: { [key: string]: {
+      openOrders: number;
+      openValue: number;
+      workHours: number;
+      attention: number;
+      completed: number;
+      revenue: number;
+      turnaroundTotal: number;
+      turnaroundCount: number;
+    }} = {};
+
+    last6Months.forEach(m => {
+      monthlyData[m] = {
+        openOrders: 0,
+        openValue: 0,
+        workHours: 0,
+        attention: 0,
+        completed: 0,
+        revenue: 0,
+        turnaroundTotal: 0,
+        turnaroundCount: 0
+      };
+    });
 
     (allPOs || []).forEach((po: any) => {
-      const statuses = po.statuses?.map((s: any) => s.status) || ['Open'];
-      const isCompleted = statuses.some((s: string) => 
-        s.includes('Completed') || s.includes('Despatched')
-      );
-      const needsAttention = statuses.some((s: string) => s.includes('PO Check'));
+      const status = po.current_status || 'Open';
+      const isCompleted = status.includes('Despatched') || status.includes('Completed') || status === 'Closed';
+      const needsAttention = status.includes('PO Check');
 
       const minsPerShipper = po.product?.mins_per_shipper || 0;
       const workHours = ((po.ordered_qty_shippers || 0) * minsPerShipper) / 60;
       const orderValue = po.customer_amount || po.system_amount || 0;
 
+      // Get month key from received date or delivery date
+      const receivedMonth = po.po_received_date?.substring(0, 7);
+      const deliveryMonth = po.delivery_date?.substring(0, 7);
+
       if (!isCompleted) {
         totalOpenOrders++;
         totalOpenValue += orderValue;
         totalOpenWorkHours += workHours;
+
+        // Track by received month
+        if (receivedMonth && monthlyData[receivedMonth]) {
+          monthlyData[receivedMonth].openOrders++;
+          monthlyData[receivedMonth].openValue += orderValue;
+          monthlyData[receivedMonth].workHours += workHours;
+        }
       } else {
-        // Calculate turnaround for completed orders
+        // Completed orders
+        if (deliveryMonth && monthlyData[deliveryMonth]) {
+          monthlyData[deliveryMonth].completed++;
+          monthlyData[deliveryMonth].revenue += orderValue;
+        }
+
+        // This month completed
+        if (po.delivery_date && new Date(po.delivery_date) >= monthStart) {
+          completedThisMonth++;
+          revenueThisMonth += orderValue;
+        }
+
+        // Turnaround calculation
         if (po.delivery_date && po.po_received_date) {
           const received = new Date(po.po_received_date);
           const delivered = new Date(po.delivery_date);
@@ -233,26 +300,44 @@ async function fetchKPIs(): Promise<DashboardKPIs> {
           if (days > 0) {
             totalTurnaroundDays += days;
             completedCount++;
-          }
-        }
 
-        // Check if completed this month
-        if (po.delivery_date && new Date(po.delivery_date) >= new Date(monthStart)) {
-          completedThisMonth++;
-          revenueThisMonth += orderValue;
+            if (deliveryMonth && monthlyData[deliveryMonth]) {
+              monthlyData[deliveryMonth].turnaroundTotal += days;
+              monthlyData[deliveryMonth].turnaroundCount++;
+            }
+          }
         }
       }
 
       if (needsAttention) {
         ordersRequiringAttention++;
+        if (receivedMonth && monthlyData[receivedMonth]) {
+          monthlyData[receivedMonth].attention++;
+        }
       }
     });
 
-    // Count components at risk (where stock < safety threshold)
-    // For now, count items with very low stock (< 100 as example threshold)
+    // Components at risk
     const componentsAtRisk = (sohData || []).filter(
       (item: any) => (item.stock_on_hand || 0) < 100
     ).length;
+
+    // Build sparkline arrays
+    const trends = {
+      openOrders: last6Months.map(m => monthlyData[m]?.openOrders || 0),
+      openValue: last6Months.map(m => Math.round(monthlyData[m]?.openValue || 0)),
+      workHours: last6Months.map(m => Math.round((monthlyData[m]?.workHours || 0) * 10) / 10),
+      attentionRequired: last6Months.map(m => monthlyData[m]?.attention || 0),
+      componentsAtRisk: last6Months.map(() => componentsAtRisk), // Static for now
+      turnaroundDays: last6Months.map(m => {
+        const data = monthlyData[m];
+        return data && data.turnaroundCount > 0 
+          ? Math.round((data.turnaroundTotal / data.turnaroundCount) * 10) / 10 
+          : 0;
+      }),
+      completedMonthly: last6Months.map(m => monthlyData[m]?.completed || 0),
+      revenueMonthly: last6Months.map(m => Math.round(monthlyData[m]?.revenue || 0)),
+    };
 
     return {
       totalOpenOrders,
@@ -264,7 +349,8 @@ async function fetchKPIs(): Promise<DashboardKPIs> {
         ? Math.round((totalTurnaroundDays / completedCount) * 10) / 10 
         : 0,
       completedThisMonth,
-      revenueThisMonth: Math.round(revenueThisMonth * 100) / 100
+      revenueThisMonth: Math.round(revenueThisMonth * 100) / 100,
+      trends
     };
 
   } catch (error) {
@@ -277,7 +363,17 @@ async function fetchKPIs(): Promise<DashboardKPIs> {
       componentsAtRisk: 0,
       averageTurnaroundDays: 0,
       completedThisMonth: 0,
-      revenueThisMonth: 0
+      revenueThisMonth: 0,
+      trends: {
+        openOrders: [],
+        openValue: [],
+        workHours: [],
+        attentionRequired: [],
+        componentsAtRisk: [],
+        turnaroundDays: [],
+        completedMonthly: [],
+        revenueMonthly: [],
+      }
     };
   }
 }
