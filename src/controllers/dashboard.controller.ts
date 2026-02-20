@@ -268,7 +268,7 @@ function formatDateForQuery(date: Date): string {
 }
 
 // ============================================================================
-// BLOCK 4: Main Dashboard Data Endpoint - FIXED
+// BLOCK 4: Main Dashboard Data Endpoint
 // ============================================================================
 export const getDashboardData = async (req: Request, res: Response) => {
   try {
@@ -290,11 +290,11 @@ export const getDashboardData = async (req: Request, res: Response) => {
       recentActivityResult,
       forecastSummaryResult
     ] = await Promise.all([
-      fetchKPIs(), // ← REMOVED dateRange
-      fetchStatusDistribution(), // ← REMOVED dateRange
-      fetchMonthlyTrends(), // ← REMOVED dateRange
-      fetchTopCustomers(), // ← REMOVED dateRange
-      fetchTopProducts(), // ← REMOVED dateRange
+      fetchKPIs(dateRange),
+      fetchStatusDistribution(dateRange),
+      fetchMonthlyTrends(dateRange),
+      fetchTopCustomers(dateRange),
+      fetchTopProducts(dateRange),
       fetchLowStockAlerts(),
       fetchRecentActivity(),
       fetchForecastSummary()
@@ -928,7 +928,7 @@ export const getQuickStats = async (req: Request, res: Response) => {
   try {
     logger.info('📊 Fetching quick stats...');
 
-    const kpis = await fetchKPIs(); // FIXED: No argument
+    const kpis = await fetchKPIs();
 
     res.status(200).json({
       success: true,
