@@ -928,7 +928,7 @@ export const getQuickStats = async (req: Request, res: Response) => {
   try {
     logger.info('📊 Fetching quick stats...');
 
-    const kpis = await fetchKPIs();
+    const kpis = await fetchKPIs(); // FIXED: No argument
 
     res.status(200).json({
       success: true,
