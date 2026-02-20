@@ -10,7 +10,10 @@
 │   ├── config
 │   │   └── supabase.ts
 │   ├── controllers
+│   │   ├── bom.controller.ts
+│   │   ├── dashboard.controller.ts
 │   │   ├── forecast.controller.ts
+│   │   ├── import.controller.ts
 │   │   ├── product.controller.ts
 │   │   ├── purchaseOrder.controller.ts
 │   │   └── soh.controller.ts
@@ -18,7 +21,10 @@
 │   │   ├── errorHandler.ts
 │   │   └── validation.ts
 │   ├── routes
+│   │   ├── bom.routes.ts
+│   │   ├── dashboard.routes.ts
 │   │   ├── forecast.routes.ts
+│   │   ├── import.routes.ts
 │   │   ├── product.routes.ts
 │   │   ├── purchaseOrder.routes.ts
 │   │   └── soh.routes.ts
@@ -34,4 +40,4 @@
 ├── tsconfig.json
 └── update-structure.sh
 
-10 directories, 25 files
+10 directories, 31 files
