@@ -268,7 +268,7 @@ function formatDateForQuery(date: Date): string {
 }
 
 // ============================================================================
-// BLOCK 4: Main Dashboard Data Endpoint
+// BLOCK 4: Main Dashboard Data Endpoint - FIXED
 // ============================================================================
 export const getDashboardData = async (req: Request, res: Response) => {
   try {
@@ -290,11 +290,11 @@ export const getDashboardData = async (req: Request, res: Response) => {
       recentActivityResult,
       forecastSummaryResult
     ] = await Promise.all([
-      fetchKPIs(dateRange),
-      fetchStatusDistribution(dateRange),
-      fetchMonthlyTrends(dateRange),
-      fetchTopCustomers(dateRange),
-      fetchTopProducts(dateRange),
+      fetchKPIs(), // ← REMOVED dateRange
+      fetchStatusDistribution(), // ← REMOVED dateRange
+      fetchMonthlyTrends(), // ← REMOVED dateRange
+      fetchTopCustomers(), // ← REMOVED dateRange
+      fetchTopProducts(), // ← REMOVED dateRange
       fetchLowStockAlerts(),
       fetchRecentActivity(),
       fetchForecastSummary()
