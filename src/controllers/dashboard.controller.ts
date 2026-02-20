@@ -348,8 +348,29 @@ async function fetchKPIs(dateRange: DateRange): Promise<DashboardKPIs> {
     const startDate = formatDateForQuery(dateRange.start);
     const endDate = formatDateForQuery(dateRange.end);
 
-    // Fetch POs within date range
-    const { data: allPOs, error: poError } = await supabase
+    // Cards 1-5: Fetch ALL open POs (current state, no date filter)
+    const { data: currentPOs, error: currentError } = await supabase
+      .from('purchase_orders')
+      .select(`
+        id,
+        customer_amount,
+        system_amount,
+        ordered_qty_shippers,
+        current_status,
+        product:products(mins_per_shipper)
+      `)
+      .not('current_status', 'ilike', '%Despatched%')
+      .not('current_status', 'ilike', '%Completed%')
+      .not('current_status', 'eq', 'Closed')
+      .not('current_status', 'eq', 'PO Canceled');
+
+    if (currentError) {
+      logger.error('Error fetching current POs', { error: currentError });
+      throw currentError;
+    }
+
+    // Cards 6-8: Fetch POs within selected date range
+    const { data: rangePOs, error: rangeError } = await supabase
       .from('purchase_orders')
       .select(`
         id,
@@ -365,27 +386,52 @@ async function fetchKPIs(dateRange: DateRange): Promise<DashboardKPIs> {
       .gte('po_received_date', startDate)
       .lte('po_received_date', endDate);
 
-    if (poError) {
-      logger.error('Error fetching POs for KPIs', { error: poError });
-      throw poError;
+    if (rangeError) {
+      logger.error('Error fetching range POs', { error: rangeError });
+      throw rangeError;
     }
 
-    // Fetch components at risk (not date filtered - current state)
+    // Components at risk (always current state)
     const { data: sohData } = await supabase
       .from('soh')
       .select('stock_on_hand');
 
-    // Initialize counters
+    // ==========================================
+    // Cards 1-5: Current state (not date filtered)
+    // ==========================================
     let totalOpenOrders = 0;
     let totalOpenValue = 0;
     let totalOpenWorkHours = 0;
     let ordersRequiringAttention = 0;
+
+    (currentPOs || []).forEach((po: any) => {
+      const status = po.current_status || 'Open';
+      const orderValue = po.customer_amount || po.system_amount || 0;
+      const minsPerShipper = po.product?.mins_per_shipper || 0;
+      const workHours = ((po.ordered_qty_shippers || 0) * minsPerShipper) / 60;
+
+      totalOpenOrders++;
+      totalOpenValue += orderValue;
+      totalOpenWorkHours += workHours;
+
+      if (status.includes('PO Check')) {
+        ordersRequiringAttention++;
+      }
+    });
+
+    const componentsAtRisk = (sohData || []).filter(
+      (item: any) => (item.stock_on_hand || 0) < 100
+    ).length;
+
+    // ==========================================
+    // Cards 6-8: Date range filtered
+    // ==========================================
     let completedInRange = 0;
     let revenueInRange = 0;
     let totalTurnaroundDays = 0;
     let completedCount = 0;
 
-    // Generate time buckets based on interval
+    // Generate time buckets for sparklines
     const timeBuckets = generateTimeBuckets(dateRange);
     const bucketData: { [key: string]: {
       openOrders: number;
@@ -411,30 +457,14 @@ async function fetchKPIs(dateRange: DateRange): Promise<DashboardKPIs> {
       };
     });
 
-    (allPOs || []).forEach((po: any) => {
+    (rangePOs || []).forEach((po: any) => {
       const status = po.current_status || 'Open';
       const isCompleted = status.includes('Despatched') || status.includes('Completed') || status === 'Closed';
-      const needsAttention = status.includes('PO Check');
-
-      const minsPerShipper = po.product?.mins_per_shipper || 0;
-      const workHours = ((po.ordered_qty_shippers || 0) * minsPerShipper) / 60;
       const orderValue = po.customer_amount || po.system_amount || 0;
 
-      // Get bucket key
-      const receivedBucket = getBucketKey(po.po_received_date, dateRange.interval);
       const deliveryBucket = po.delivery_date ? getBucketKey(po.delivery_date, dateRange.interval) : null;
 
-      if (!isCompleted) {
-        totalOpenOrders++;
-        totalOpenValue += orderValue;
-        totalOpenWorkHours += workHours;
-
-        if (receivedBucket && bucketData[receivedBucket]) {
-          bucketData[receivedBucket].openOrders++;
-          bucketData[receivedBucket].openValue += orderValue;
-          bucketData[receivedBucket].workHours += workHours;
-        }
-      } else {
+      if (isCompleted) {
         completedInRange++;
         revenueInRange += orderValue;
 
@@ -459,26 +489,14 @@ async function fetchKPIs(dateRange: DateRange): Promise<DashboardKPIs> {
           }
         }
       }
-
-      if (needsAttention) {
-        ordersRequiringAttention++;
-        if (receivedBucket && bucketData[receivedBucket]) {
-          bucketData[receivedBucket].attention++;
-        }
-      }
     });
 
-    // Components at risk
-    const componentsAtRisk = (sohData || []).filter(
-      (item: any) => (item.stock_on_hand || 0) < 100
-    ).length;
-
-    // Build sparkline arrays from buckets
+    // Build sparkline arrays
     const trends = {
-      openOrders: timeBuckets.map(b => bucketData[b]?.openOrders || 0),
-      openValue: timeBuckets.map(b => Math.round(bucketData[b]?.openValue || 0)),
-      workHours: timeBuckets.map(b => Math.round((bucketData[b]?.workHours || 0) * 10) / 10),
-      attentionRequired: timeBuckets.map(b => bucketData[b]?.attention || 0),
+      openOrders: timeBuckets.map(() => totalOpenOrders),
+      openValue: timeBuckets.map(() => Math.round(totalOpenValue)),
+      workHours: timeBuckets.map(() => Math.round(totalOpenWorkHours * 10) / 10),
+      attentionRequired: timeBuckets.map(() => ordersRequiringAttention),
       componentsAtRisk: timeBuckets.map(() => componentsAtRisk),
       turnaroundDays: timeBuckets.map(b => {
         const data = bucketData[b];
