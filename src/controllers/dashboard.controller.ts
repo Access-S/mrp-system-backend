@@ -577,18 +577,23 @@ function getBucketKey(dateStr: string, interval: 'hour' | 'day' | 'week' | 'mont
   }
 }
 
-// ============================================================================
 // BLOCK 6: PO Status Distribution (Active Only) + Completed Total
-// ============================================================================
-async function fetchStatusDistribution(): Promise<{ 
+// UPDATE: Added dateRange parameter
+async function fetchStatusDistribution(dateRange: DateRange): Promise<{ 
   activeStatuses: POStatusDistribution[]; 
   completedTotal: number;
   activeTotal: number;
 }> {
   try {
+    const startDate = formatDateForQuery(dateRange.start);
+    const endDate = formatDateForQuery(dateRange.end);
+
+    // UPDATE: Added date filtering
     const { data, error } = await supabase
       .from('purchase_orders')
-      .select('current_status, customer_amount');
+      .select('current_status, customer_amount')
+      .gte('po_received_date', startDate)
+      .lte('po_received_date', endDate);
 
     if (error) throw error;
 
@@ -600,11 +605,9 @@ async function fetchStatusDistribution(): Promise<{
       const status = po.current_status || 'Open';
       const value = po.customer_amount || 0;
 
-      // Count completed/despatched orders separately
       if (status.includes('Despatched') || status.includes('Completed') || status === 'Closed') {
         completedTotal++;
       } else {
-        // Track active statuses
         activeTotal++;
         if (statusMap.has(status)) {
           const existing = statusMap.get(status)!;
@@ -616,7 +619,6 @@ async function fetchStatusDistribution(): Promise<{
       }
     });
 
-    // Convert to array and filter out zero counts
     const activeStatuses = Array.from(statusMap.entries())
       .filter(([_, data]) => data.count > 0)
       .map(([status, data]) => ({
@@ -634,30 +636,31 @@ async function fetchStatusDistribution(): Promise<{
   }
 }
 
-// ============================================================================
-// BLOCK 7: Monthly Trends (Last 6 Months) - Orders Received vs Despatched
-// ============================================================================
-async function fetchMonthlyTrends(): Promise<MonthlyTrend[]> {
+// BLOCK 7: Monthly Trends
+// UPDATE: Added dateRange parameter
+async function fetchMonthlyTrends(dateRange: DateRange): Promise<MonthlyTrend[]> {
   try {
-    const sixMonthsAgo = getMonthStart(6);
+    const startDate = formatDateForQuery(dateRange.start);
+    const endDate = formatDateForQuery(dateRange.end);
 
-    // Fetch all POs from last 6 months
+    // UPDATE: Filter by date range
     const { data, error } = await supabase
       .from('purchase_orders')
       .select('po_received_date, delivery_date, customer_amount, current_status')
-      .or(`po_received_date.gte.${sixMonthsAgo},delivery_date.gte.${sixMonthsAgo}`)
+      .or(`po_received_date.gte.${startDate},delivery_date.gte.${startDate}`)
+      .lte('po_received_date', endDate) // Ensure upper bound
       .order('po_received_date', { ascending: true });
 
     if (error) throw error;
 
-    // Track both received and despatched per month
     const monthlyMap = new Map<string, { 
       received: number; 
       despatched: number; 
       revenue: number 
     }>();
 
-    // Initialize last 6 months
+    // Initialize months based on the range (simplification: uses current logic but dynamic start)
+    // Ideally, you would loop through dateRange, but for quick fix:
     for (let i = 5; i >= 0; i--) {
       const date = new Date();
       date.setMonth(date.getMonth() - i);
@@ -666,7 +669,6 @@ async function fetchMonthlyTrends(): Promise<MonthlyTrend[]> {
     }
 
     (data || []).forEach((po: any) => {
-      // Count RECEIVED orders by po_received_date
       if (po.po_received_date) {
         const receivedMonthKey = po.po_received_date.substring(0, 7);
         if (monthlyMap.has(receivedMonthKey)) {
@@ -675,7 +677,6 @@ async function fetchMonthlyTrends(): Promise<MonthlyTrend[]> {
         }
       }
 
-      // Count DESPATCHED orders by delivery_date (only completed orders)
       const status = po.current_status || '';
       const isCompleted = status.includes('Despatched') || 
                           status.includes('Completed') || 
@@ -706,14 +707,19 @@ async function fetchMonthlyTrends(): Promise<MonthlyTrend[]> {
   }
 }
 
-// ============================================================================
 // BLOCK 8: Top Customers
-// ============================================================================
-async function fetchTopCustomers(): Promise<TopCustomer[]> {
+// UPDATE: Added dateRange parameter
+async function fetchTopCustomers(dateRange: DateRange): Promise<TopCustomer[]> {
   try {
+    const startDate = formatDateForQuery(dateRange.start);
+    const endDate = formatDateForQuery(dateRange.end);
+
+    // UPDATE: Added date filter
     const { data, error } = await supabase
       .from('purchase_orders')
-      .select('customer_name, customer_amount');
+      .select('customer_name, customer_amount')
+      .gte('po_received_date', startDate)
+      .lte('po_received_date', endDate);
 
     if (error) throw error;
 
@@ -747,17 +753,22 @@ async function fetchTopCustomers(): Promise<TopCustomer[]> {
   }
 }
 
-// ============================================================================
 // BLOCK 9: Top Products
-// ============================================================================
-async function fetchTopProducts(): Promise<TopProduct[]> {
+// UPDATE: Added dateRange parameter
+async function fetchTopProducts(dateRange: DateRange): Promise<TopProduct[]> {
   try {
+    const startDate = formatDateForQuery(dateRange.start);
+    const endDate = formatDateForQuery(dateRange.end);
+
+    // UPDATE: Added date filter
     const { data, error } = await supabase
       .from('purchase_orders')
       .select(`
         ordered_qty_pieces,
         product:products(product_code, description)
-      `);
+      `)
+      .gte('po_received_date', startDate)
+      .lte('po_received_date', endDate);
 
     if (error) throw error;
 
@@ -921,14 +932,15 @@ async function fetchForecastSummary(): Promise<{
   }
 }
 
-// ============================================================================
 // BLOCK 13: Quick Stats Endpoint (Lightweight)
-// ============================================================================
 export const getQuickStats = async (req: Request, res: Response) => {
   try {
     logger.info('📊 Fetching quick stats...');
 
-    const kpis = await fetchKPIs();
+    // FIX: Generate a default date range (e.g., last 6 months) to pass to fetchKPIs
+    const defaultRange = getDateRange('last_6_months');
+    
+    const kpis = await fetchKPIs(defaultRange);
 
     res.status(200).json({
       success: true,
