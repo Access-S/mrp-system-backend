@@ -2,7 +2,7 @@ services:
   - type: web
     name: mrp-backend
     env: node
-    region: oregon  # or choose closest to you: oregon, ohio, frankfurt, singapore
+    region: oregon
     plan: free
     buildCommand: npm ci && npm run build
     startCommand: npm start
@@ -17,4 +17,18 @@ services:
       - key: SUPABASE_ANON_KEY
         sync: false
       - key: CORS_ORIGIN
-        value: https://your-frontend.onrender.com  # We'll update this later
+        value: https://your-frontend.onrender.com
+      - key: CRON_SECRET
+        sync: false
+
+  - type: cron
+    name: mrp-kpi-snapshot
+    env: node
+    region: oregon
+    plan: free
+    schedule: "59 12 * * *"
+    buildCommand: npm ci && npm run build
+    startCommand: node -e "fetch('https://mrp-1.onrender.com/api/snapshots/auto', {method:'POST', headers:{'x-cron-secret':process.env.CRON_SECRET}}).then(r=>r.json()).then(d=>{console.log(JSON.stringify(d));process.exit(0)}).catch(e=>{console.error(e);process.exit(1)})"
+    envVars:
+      - key: CRON_SECRET
+        sync: false

@@ -11,6 +11,7 @@ import forecastRoutes from './routes/forecast.routes';
 import bomRoutes from './routes/bom.routes';
 import dashboardRoutes from './routes/dashboard.routes';
 import importRoutes from './routes/import.routes';
+import snapshotRoutes from './routes/snapshot.routes';
 
 // Import middleware
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
@@ -102,6 +103,7 @@ app.use('/api/soh', sohRoutes);
 app.use('/api/forecasts', forecastRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/import', importRoutes);
+app.use('/api/snapshots', snapshotRoutes);
 
 // BLOCK 5: Error Handling and Server Start
 app.use(notFoundHandler);
