@@ -21,7 +21,7 @@ interface DashboardKPIs {
   averageTurnaroundDays: number;
   completedThisMonth: number;
   revenueThisMonth: number;
-  // Add sparkline data
+  snapshotAvailable: boolean;
   trends: {
     openOrders: number[];
     openValue: number[];
@@ -454,6 +454,40 @@ async function fetchKPIs(dateRange: DateRange, timeRange: string): Promise<Dashb
       }
     });
 
+     // For past periods WITHOUT snapshot, return zeros with flag
+     if (needsSnapshot && !snapshotKPIs) {
+      logger.info(`⚠️ No snapshot available for ${timeRange} - returning zeros for Cards 1-6`);
+      
+      const trends = {
+        openOrders: timeBuckets.map(() => 0),
+        openValue: timeBuckets.map(() => 0),
+        workHours: timeBuckets.map(() => 0),
+        attentionRequired: timeBuckets.map(() => 0),
+        componentsAtRisk: timeBuckets.map(() => 0),
+        turnaroundDays: timeBuckets.map(b => {
+          const data = bucketData[b];
+          return data && data.turnaroundCount > 0 
+            ? Math.round((data.turnaroundTotal / data.turnaroundCount) * 10) / 10 
+            : 0;
+        }),
+        completedMonthly: timeBuckets.map(b => bucketData[b]?.completed || 0),
+        revenueMonthly: timeBuckets.map(b => Math.round(bucketData[b]?.revenue || 0)),
+      };
+
+      return {
+        totalOpenOrders: 0,
+        totalOpenValue: 0,
+        totalOpenWorkHours: 0,
+        ordersRequiringAttention: 0,
+        componentsAtRisk: 0,
+        averageTurnaroundDays: 0,
+        completedThisMonth: completedInRange,
+        revenueThisMonth: Math.round(revenueInRange * 100) / 100,
+        snapshotAvailable: false,  // Flag: no snapshot
+        trends
+      };
+    }
+
     // If we have snapshot data, use it for Cards 1-6
     if (snapshotKPIs) {
       const trends = {
@@ -481,6 +515,7 @@ async function fetchKPIs(dateRange: DateRange, timeRange: string): Promise<Dashb
         averageTurnaroundDays: snapshotKPIs.avg_turnaround_days,
         completedThisMonth: completedInRange,
         revenueThisMonth: Math.round(revenueInRange * 100) / 100,
+        snapshotAvailable: true,
         trends
       };
     }
@@ -566,6 +601,7 @@ async function fetchKPIs(dateRange: DateRange, timeRange: string): Promise<Dashb
       averageTurnaroundDays: avgTurnaroundDays,
       completedThisMonth: completedInRange,
       revenueThisMonth: Math.round(revenueInRange * 100) / 100,
+      snapshotAvailable: true,  // Live data is always "available"
       trends
     };
 
@@ -580,6 +616,7 @@ async function fetchKPIs(dateRange: DateRange, timeRange: string): Promise<Dashb
       averageTurnaroundDays: 0,
       completedThisMonth: 0,
       revenueThisMonth: 0,
+      snapshotAvailable: false,
       trends: {
         openOrders: [],
         openValue: [],
