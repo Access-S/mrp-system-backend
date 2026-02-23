@@ -1005,7 +1005,7 @@ export const getQuickStats = async (req: Request, res: Response) => {
     // FIX: Generate a default date range (e.g., last 6 months) to pass to fetchKPIs
     const defaultRange = getDateRange('last_6_months');
     
-    const kpis = await fetchKPIs(defaultRange);
+    const kpis = await fetchKPIs(defaultRange, 'last_6_months');
 
     res.status(200).json({
       success: true,
