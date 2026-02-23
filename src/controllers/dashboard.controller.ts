@@ -290,7 +290,7 @@ export const getDashboardData = async (req: Request, res: Response) => {
       recentActivityResult,
       forecastSummaryResult
     ] = await Promise.all([
-      fetchKPIs(dateRange),
+      fetchKPIs(dateRange, timeRange),
       fetchStatusDistribution(dateRange),
       fetchMonthlyTrends(dateRange),
       fetchTopCustomers(dateRange),
@@ -341,35 +341,40 @@ export const getDashboardData = async (req: Request, res: Response) => {
 };
 
 // ============================================================================
-// BLOCK 5: KPIs Calculation with Trends (Updated with DateRange)
+// BLOCK 5: KPIs Calculation - Reads Snapshots for Past Periods
 // ============================================================================
-async function fetchKPIs(dateRange: DateRange): Promise<DashboardKPIs> {
+async function fetchKPIs(dateRange: DateRange, timeRange: string): Promise<DashboardKPIs> {
   try {
     const startDate = formatDateForQuery(dateRange.start);
     const endDate = formatDateForQuery(dateRange.end);
 
-    // Cards 1-5: Fetch ALL open POs (current state, no date filter)
-    const { data: currentPOs, error: currentError } = await supabase
-      .from('purchase_orders')
-      .select(`
-        id,
-        customer_amount,
-        system_amount,
-        ordered_qty_shippers,
-        current_status,
-        product:products(mins_per_shipper)
-      `)
-      .not('current_status', 'ilike', '%Despatched%')
-      .not('current_status', 'ilike', '%Completed%')
-      .not('current_status', 'eq', 'Closed')
-      .not('current_status', 'eq', 'PO Canceled');
+    // Determine if we need snapshot data (past periods)
+    const needsSnapshot = ['last_week', 'last_month', 'last_3_months', 'last_6_months', 'last_fy'].includes(timeRange);
+    
+    let snapshotKPIs: any = null;
 
-    if (currentError) {
-      logger.error('Error fetching current POs', { error: currentError });
-      throw currentError;
+    // For past periods, try to fetch from snapshots
+    if (needsSnapshot) {
+      const snapshotType = timeRange === 'last_week' ? 'weekly' : 'monthly';
+      
+      const { data: snapshots, error: snapError } = await supabase
+        .from('kpi_snapshots')
+        .select('*')
+        .eq('snapshot_type', snapshotType)
+        .gte('snapshot_date', startDate)
+        .lte('snapshot_date', endDate)
+        .order('snapshot_date', { ascending: false })
+        .limit(1);
+
+      if (!snapError && snapshots && snapshots.length > 0) {
+        snapshotKPIs = snapshots[0];
+        logger.info(`📸 Using snapshot data from: ${snapshotKPIs.period_label}`);
+      } else {
+        logger.info(`📊 No snapshot found for ${timeRange}, calculating live data`);
+      }
     }
 
-    // Cards 6-8: Fetch POs within selected date range
+    // Cards 7-8: Always calculate from PO data (date range filtered)
     const { data: rangePOs, error: rangeError } = await supabase
       .from('purchase_orders')
       .select(`
@@ -391,41 +396,7 @@ async function fetchKPIs(dateRange: DateRange): Promise<DashboardKPIs> {
       throw rangeError;
     }
 
-    // Components at risk (always current state)
-    const { data: sohData } = await supabase
-      .from('soh')
-      .select('stock_on_hand');
-
-    // ==========================================
-    // Cards 1-5: Current state (not date filtered)
-    // ==========================================
-    let totalOpenOrders = 0;
-    let totalOpenValue = 0;
-    let totalOpenWorkHours = 0;
-    let ordersRequiringAttention = 0;
-
-    (currentPOs || []).forEach((po: any) => {
-      const status = po.current_status || 'Open';
-      const orderValue = po.customer_amount || po.system_amount || 0;
-      const minsPerShipper = po.product?.mins_per_shipper || 0;
-      const workHours = ((po.ordered_qty_shippers || 0) * minsPerShipper) / 60;
-
-      totalOpenOrders++;
-      totalOpenValue += orderValue;
-      totalOpenWorkHours += workHours;
-
-      if (status.includes('PO Check')) {
-        ordersRequiringAttention++;
-      }
-    });
-
-    const componentsAtRisk = (sohData || []).filter(
-      (item: any) => (item.stock_on_hand || 0) < 100
-    ).length;
-
-    // ==========================================
-    // Cards 6-8: Date range filtered
-    // ==========================================
+    // Calculate Cards 7-8 (Completed & Revenue in range)
     let completedInRange = 0;
     let revenueInRange = 0;
     let totalTurnaroundDays = 0;
@@ -434,10 +405,6 @@ async function fetchKPIs(dateRange: DateRange): Promise<DashboardKPIs> {
     // Generate time buckets for sparklines
     const timeBuckets = generateTimeBuckets(dateRange);
     const bucketData: { [key: string]: {
-      openOrders: number;
-      openValue: number;
-      workHours: number;
-      attention: number;
       completed: number;
       revenue: number;
       turnaroundTotal: number;
@@ -446,10 +413,6 @@ async function fetchKPIs(dateRange: DateRange): Promise<DashboardKPIs> {
 
     timeBuckets.forEach(bucket => {
       bucketData[bucket] = {
-        openOrders: 0,
-        openValue: 0,
-        workHours: 0,
-        attention: 0,
         completed: 0,
         revenue: 0,
         turnaroundTotal: 0,
@@ -491,6 +454,92 @@ async function fetchKPIs(dateRange: DateRange): Promise<DashboardKPIs> {
       }
     });
 
+    // If we have snapshot data, use it for Cards 1-6
+    if (snapshotKPIs) {
+      const trends = {
+        openOrders: timeBuckets.map(() => snapshotKPIs.open_orders),
+        openValue: timeBuckets.map(() => Math.round(snapshotKPIs.open_order_value)),
+        workHours: timeBuckets.map(() => snapshotKPIs.work_hours_pending),
+        attentionRequired: timeBuckets.map(() => snapshotKPIs.attention_required),
+        componentsAtRisk: timeBuckets.map(() => snapshotKPIs.components_at_risk),
+        turnaroundDays: timeBuckets.map(b => {
+          const data = bucketData[b];
+          return data && data.turnaroundCount > 0 
+            ? Math.round((data.turnaroundTotal / data.turnaroundCount) * 10) / 10 
+            : snapshotKPIs.avg_turnaround_days;
+        }),
+        completedMonthly: timeBuckets.map(b => bucketData[b]?.completed || 0),
+        revenueMonthly: timeBuckets.map(b => Math.round(bucketData[b]?.revenue || 0)),
+      };
+
+      return {
+        totalOpenOrders: snapshotKPIs.open_orders,
+        totalOpenValue: snapshotKPIs.open_order_value,
+        totalOpenWorkHours: snapshotKPIs.work_hours_pending,
+        ordersRequiringAttention: snapshotKPIs.attention_required,
+        componentsAtRisk: snapshotKPIs.components_at_risk,
+        averageTurnaroundDays: snapshotKPIs.avg_turnaround_days,
+        completedThisMonth: completedInRange,
+        revenueThisMonth: Math.round(revenueInRange * 100) / 100,
+        trends
+      };
+    }
+
+    // No snapshot - calculate current live data for Cards 1-6
+    const { data: currentPOs, error: currentError } = await supabase
+      .from('purchase_orders')
+      .select(`
+        id,
+        customer_amount,
+        system_amount,
+        ordered_qty_shippers,
+        current_status,
+        product:products(mins_per_shipper)
+      `)
+      .not('current_status', 'ilike', '%Despatched%')
+      .not('current_status', 'ilike', '%Completed%')
+      .not('current_status', 'eq', 'Closed')
+      .not('current_status', 'eq', 'PO Canceled');
+
+    if (currentError) {
+      logger.error('Error fetching current POs', { error: currentError });
+      throw currentError;
+    }
+
+    // Components at risk (always current state)
+    const { data: sohData } = await supabase
+      .from('soh')
+      .select('stock_on_hand');
+
+    let totalOpenOrders = 0;
+    let totalOpenValue = 0;
+    let totalOpenWorkHours = 0;
+    let ordersRequiringAttention = 0;
+
+    (currentPOs || []).forEach((po: any) => {
+      const status = po.current_status || 'Open';
+      const orderValue = po.customer_amount || po.system_amount || 0;
+      const minsPerShipper = po.product?.mins_per_shipper || 0;
+      const workHours = ((po.ordered_qty_shippers || 0) * minsPerShipper) / 60;
+
+      totalOpenOrders++;
+      totalOpenValue += orderValue;
+      totalOpenWorkHours += workHours;
+
+      if (status.includes('PO Check')) {
+        ordersRequiringAttention++;
+      }
+    });
+
+    const componentsAtRisk = (sohData || []).filter(
+      (item: any) => (item.stock_on_hand || 0) < 100
+    ).length;
+
+    // Calculate average turnaround from range data
+    const avgTurnaroundDays = completedCount > 0 
+      ? Math.round((totalTurnaroundDays / completedCount) * 10) / 10 
+      : 0;
+
     // Build sparkline arrays
     const trends = {
       openOrders: timeBuckets.map(() => totalOpenOrders),
@@ -502,7 +551,7 @@ async function fetchKPIs(dateRange: DateRange): Promise<DashboardKPIs> {
         const data = bucketData[b];
         return data && data.turnaroundCount > 0 
           ? Math.round((data.turnaroundTotal / data.turnaroundCount) * 10) / 10 
-          : 0;
+          : avgTurnaroundDays;
       }),
       completedMonthly: timeBuckets.map(b => bucketData[b]?.completed || 0),
       revenueMonthly: timeBuckets.map(b => Math.round(bucketData[b]?.revenue || 0)),
@@ -514,9 +563,7 @@ async function fetchKPIs(dateRange: DateRange): Promise<DashboardKPIs> {
       totalOpenWorkHours: Math.round(totalOpenWorkHours * 10) / 10,
       ordersRequiringAttention,
       componentsAtRisk,
-      averageTurnaroundDays: completedCount > 0 
-        ? Math.round((totalTurnaroundDays / completedCount) * 10) / 10 
-        : 0,
+      averageTurnaroundDays: avgTurnaroundDays,
       completedThisMonth: completedInRange,
       revenueThisMonth: Math.round(revenueInRange * 100) / 100,
       trends
