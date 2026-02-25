@@ -312,3 +312,35 @@ export const updatePoStatus = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const deletePurchaseOrder = async (req: Request, res: Response) => {
+  try {
+    const { poId } = req.params;
+
+    logger.info('Deleting purchase order', { poId });
+
+    const { error } = await supabase
+      .from('purchase_orders')
+      .delete()
+      .eq('id', poId);
+
+    if (error) {
+      logger.error('Supabase error deleting purchase order', { error, poId });
+      throw createError('Failed to delete purchase order', 500);
+    }
+
+    logger.info('Purchase order deleted successfully', { poId });
+
+    res.status(200).json({
+      success: true,
+      message: 'Purchase order deleted successfully'
+    });
+
+  } catch (error: any) {
+    logger.error('Error in deletePurchaseOrder', { error: error.message, poId: req.params.poId });
+    res.status(error.statusCode || 500).json({ 
+      success: false,
+      message: error.message || 'Failed to delete purchase order'
+    });
+  }
+};
