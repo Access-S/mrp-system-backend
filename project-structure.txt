@@ -1,47 +1,47 @@
 .
-database
-database/migrations
-database/migrations/001_create_soh_table.sql
-database/schema
-database/schema/Complete MRP Schema.sql
-database/schema/functions.sql
-database/schema/kpi_snapshots.sql
-database/schema/tables.sql
-.env
-.git
-.gitignore
-health.routes.ts
-package.json
-package-lock.json
-project-structure.txt
-render.yaml
-src
-src/config
-src/config/supabase.ts
-src/controllers
-src/controllers/bom.controller.ts
-src/controllers/dashboard.controller.ts
-src/controllers/forecast.controller.ts
-src/controllers/import.controller.ts
-src/controllers/product.controller.ts
-src/controllers/purchaseOrder.controller.ts
-src/controllers/snapshot.controller.ts
-src/controllers/soh.controller.ts
-src/middleware
-src/middleware/errorHandler.ts
-src/middleware/validation.ts
-src/routes
-src/routes/bom.routes.ts
-src/routes/dashboard.routes.ts
-src/routes/forecast.routes.ts
-src/routes/import.routes.ts
-src/routes/product.routes.ts
-src/routes/purchaseOrder.routes.ts
-src/routes/snapshot.routes.ts
-src/routes/soh.routes.ts
-src/server.ts
-src/utils
-src/utils/asyncHandler.ts
-src/utils/logger.ts
-tsconfig.json
-update-structure.sh
+|____.env
+|____tsconfig.json
+|____update-structure.sh
+|____render.yaml
+|____project-structure.txt
+|____.git
+|____package.json
+|____src
+| |____middleware
+| | |____errorHandler.ts
+| | |____validation.ts
+| |____controllers
+| | |____soh.controller.ts
+| | |____product.controller.ts
+| | |____dashboard.controller.ts
+| | |____snapshot.controller.ts
+| | |____purchaseOrder.controller.ts
+| | |____bom.controller.ts
+| | |____import.controller.ts
+| | |____forecast.controller.ts
+| |____utils
+| | |____asyncHandler.ts
+| | |____logger.ts
+| |____server.ts
+| |____routes
+| | |____product.routes.ts
+| | |____purchaseOrder.routes.ts
+| | |____bom.routes.ts
+| | |____import.routes.ts
+| | |____soh.routes.ts
+| | |____forecast.routes.ts
+| | |____snapshot.routes.ts
+| | |____dashboard.routes.ts
+| |____config
+| | |____supabase.ts
+|____package-lock.json
+|____database
+| |____migrations
+| | |____001_create_soh_table.sql
+| |____schema
+| | |____kpi_snapshots.sql
+| | |____tables.sql
+| | |____functions.sql
+| | |____Complete MRP Schema.sql
+|____.gitignore
+|____health.routes.ts
