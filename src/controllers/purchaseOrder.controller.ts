@@ -219,10 +219,11 @@ export const updatePurchaseOrder = async (req: Request, res: Response) => {
 export const updatePoStatus = async (req: Request, res: Response) => {
   try {
     const { poId } = req.params;
-    const { status } = req.body;
+    const { status, deliveryDate, docketNumber } = req.body;
     
-    logger.info('Updating purchase order status', { poId, status });
+    logger.info('Updating purchase order status', { poId, status, deliveryDate, docketNumber });
 
+    // Step 1: Toggle the status (existing logic)
     const { data, error } = await supabase.rpc('toggle_po_status', {
       target_po_id: poId,
       status_to_toggle: status
@@ -233,7 +234,64 @@ export const updatePoStatus = async (req: Request, res: Response) => {
       throw createError(error.message, 400);
     }
     
-    const updatedStatuses = data.length > 0 && data[0].statuses ? data[0].statuses : ['Open'];
+    const updatedStatuses = data.length > 0 && data[0].statuses 
+      ? data[0].statuses 
+      : ['Open'];
+
+    // ✅ Step 2: If this is a "Despatched/ Completed" status being ADDED,
+    // save the despatch details to the purchase_orders table
+    if (
+      status === 'Despatched/ Completed' && 
+      updatedStatuses.includes('Despatched/ Completed') &&
+      deliveryDate && 
+      docketNumber
+    ) {
+      logger.info('Saving despatch details', { poId, deliveryDate, docketNumber });
+
+      const { error: despatchError } = await supabase
+        .from('purchase_orders')
+        .update({
+          delivery_date: deliveryDate,
+          delivery_docket_number: docketNumber,
+        })
+        .eq('id', poId);
+
+      if (despatchError) {
+        logger.error('Error saving despatch details', { despatchError, poId });
+        // Don't throw — status was already updated successfully
+        // Just log the warning so the user knows
+        logger.warn('Status updated but despatch details failed to save', { 
+          poId, 
+          despatchError: despatchError.message 
+        });
+      } else {
+        logger.info('Despatch details saved successfully', { poId });
+      }
+    }
+
+    // ✅ Step 3: If "Despatched/ Completed" was REMOVED (toggled off),
+    // clear the despatch details
+    if (
+      status === 'Despatched/ Completed' && 
+      !updatedStatuses.includes('Despatched/ Completed')
+    ) {
+      logger.info('Clearing despatch details (status removed)', { poId });
+
+      const { error: clearError } = await supabase
+        .from('purchase_orders')
+        .update({
+          delivery_date: null,
+          delivery_docket_number: null,
+        })
+        .eq('id', poId);
+
+      if (clearError) {
+        logger.warn('Failed to clear despatch details', { 
+          poId, 
+          clearError: clearError.message 
+        });
+      }
+    }
     
     logger.info('Purchase order status updated successfully', { poId, updatedStatuses });
     
@@ -244,42 +302,13 @@ export const updatePoStatus = async (req: Request, res: Response) => {
     });
 
   } catch (error: any) {
-    logger.error('Error in updatePoStatus', { error: error.message, poId: req.params.poId });
+    logger.error('Error in updatePoStatus', { 
+      error: error.message, 
+      poId: req.params.poId 
+    });
     res.status(error.statusCode || 500).json({ 
       success: false, 
       message: error.message || 'Failed to update PO status'
-    });
-  }
-};
-
-export const deletePurchaseOrder = async (req: Request, res: Response) => {
-  try {
-    const { poId } = req.params;
-
-    logger.info('Deleting purchase order', { poId });
-
-    const { error } = await supabase
-      .from('purchase_orders')
-      .delete()
-      .eq('id', poId);
-
-    if (error) {
-      logger.error('Supabase error deleting purchase order', { error, poId });
-      throw createError('Failed to delete purchase order', 500);
-    }
-
-    logger.info('Purchase order deleted successfully', { poId });
-
-    res.status(200).json({
-      success: true,
-      message: 'Purchase order deleted successfully'
-    });
-
-  } catch (error: any) {
-    logger.error('Error in deletePurchaseOrder', { error: error.message, poId: req.params.poId });
-    res.status(error.statusCode || 500).json({ 
-      success: false,
-      message: error.message || 'Failed to delete purchase order'
     });
   }
 };

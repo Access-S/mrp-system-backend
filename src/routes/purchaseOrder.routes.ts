@@ -1,3 +1,5 @@
+//src/routes/purchaseOrder.routes.ts
+
 import { Router } from 'express';
 import Joi from 'joi';
 import { 
@@ -50,7 +52,24 @@ const statusUpdateSchema = Joi.object({
     'Despatched/ Completed',
     'Closed',
     'PO Canceled'
-  ).required()
+  ).required(),
+  // ✅ ADD: Optional despatch details (required when status is "Despatched/ Completed")
+  deliveryDate: Joi.string().when('status', {
+    is: 'Despatched/ Completed',
+    then: Joi.string().required().messages({
+      'any.required': 'Delivery date is required when despatching',
+      'string.empty': 'Delivery date cannot be empty'
+    }),
+    otherwise: Joi.string().optional().allow(null, '')
+  }),
+  docketNumber: Joi.string().when('status', {
+    is: 'Despatched/ Completed',
+    then: Joi.string().required().messages({
+      'any.required': 'Docket number is required when despatching',
+      'string.empty': 'Docket number cannot be empty'
+    }),
+    otherwise: Joi.string().optional().allow(null, '')
+  })
 });
 
 const querySchema = Joi.object({
