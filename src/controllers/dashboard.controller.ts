@@ -3,10 +3,10 @@
 // ============================================================================
 // BLOCK 1: Imports
 // ============================================================================
-import { Request, Response } from 'express';
-import { supabase } from '../config/supabase';
-import logger from '../utils/logger';
-import { createError } from '../middleware/errorHandler';
+import { Request, Response } from "express";
+import { supabase } from "../config/supabase";
+import logger from "../utils/logger";
+import { createError } from "../middleware/errorHandler";
 
 // ============================================================================
 // BLOCK 2: Interfaces
@@ -94,6 +94,7 @@ interface DashboardData {
   };
   lastUpdated: string;
 }
+
 // ============================================================================
 // BLOCK 3: Helper Functions
 // ============================================================================
@@ -114,7 +115,7 @@ const getMonthStart = (monthsAgo: number = 0): string => {
  */
 const formatMonth = (dateStr: string): string => {
   const date = new Date(dateStr);
-  return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
 };
 
 // ============================================================================
@@ -125,121 +126,100 @@ interface DateRange {
   start: Date;
   end: Date;
   points: number;
-  interval: 'hour' | 'day' | 'week' | 'month';
+  interval: "hour" | "day" | "week" | "month";
 }
 
 function getFinancialYearStart(date: Date): Date {
   const year = date.getFullYear();
   const month = date.getMonth();
-  
-  if (month >= 6) { // Jul-Dec
-    return new Date(year, 6, 1); // Jul 1 this year
-  } else { // Jan-Jun
-    return new Date(year - 1, 6, 1); // Jul 1 last year
+  if (month >= 6) {
+    return new Date(year, 6, 1);
+  } else {
+    return new Date(year - 1, 6, 1);
   }
 }
 
 function getFinancialYearEnd(date: Date): Date {
   const year = date.getFullYear();
   const month = date.getMonth();
-  
-  if (month >= 6) { // Jul-Dec
-    return new Date(year + 1, 5, 30); // Jun 30 next year
-  } else { // Jan-Jun
-    return new Date(year, 5, 30); // Jun 30 this year
+  if (month >= 6) {
+    return new Date(year + 1, 5, 30);
+  } else {
+    return new Date(year, 5, 30);
   }
 }
 
 function getDateRange(timeRange: string): DateRange {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  
+
   switch (timeRange) {
-    case 'today':
-      return {
-        start: today,
-        end: now,
-        points: 24,
-        interval: 'hour'
-      };
-    
-    case 'this_week': {
+    case "today":
+      return { start: today, end: now, points: 24, interval: "hour" };
+
+    case "this_week": {
       const dayOfWeek = today.getDay();
       const monday = new Date(today);
       monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
-      return {
-        start: monday,
-        end: now,
-        points: 7,
-        interval: 'day'
-      };
+      return { start: monday, end: now, points: 7, interval: "day" };
     }
-    
-    case 'last_week': {
+
+    case "last_week": {
       const dayOfWeek = today.getDay();
       const lastMonday = new Date(today);
-      lastMonday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1) - 7);
+      lastMonday.setDate(
+        today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1) - 7
+      );
       const lastSunday = new Date(lastMonday);
       lastSunday.setDate(lastMonday.getDate() + 6);
-      return {
-        start: lastMonday,
-        end: lastSunday,
-        points: 7,
-        interval: 'day'
-      };
+      return { start: lastMonday, end: lastSunday, points: 7, interval: "day" };
     }
-    
-    case 'this_month': {
+
+    case "this_month": {
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
       return {
         start: monthStart,
         end: now,
         points: now.getDate(),
-        interval: 'day'
+        interval: "day",
       };
     }
-    
-    case 'last_month': {
+
+    case "last_month": {
       const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
       return {
         start: lastMonthStart,
         end: lastMonthEnd,
         points: lastMonthEnd.getDate(),
-        interval: 'day'
+        interval: "day",
       };
     }
-    
-    case 'last_3_months': {
-      const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
-      return {
-        start: threeMonthsAgo,
-        end: now,
-        points: 12,
-        interval: 'week'
-      };
+
+    case "last_3_months": {
+      const threeMonthsAgo = new Date(
+        now.getFullYear(),
+        now.getMonth() - 3,
+        now.getDate()
+      );
+      return { start: threeMonthsAgo, end: now, points: 12, interval: "week" };
     }
-    
-    case 'last_6_months': {
+
+    case "last_6_months": {
       const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, 1);
-      return {
-        start: sixMonthsAgo,
-        end: now,
-        points: 6,
-        interval: 'month'
-      };
+      return { start: sixMonthsAgo, end: now, points: 6, interval: "month" };
     }
-    
-    case 'this_fy': {
+
+    case "this_fy": {
       return {
         start: getFinancialYearStart(now),
         end: now,
         points: 12,
-        interval: 'month'
+        interval: "month",
       };
     }
-    
-    case 'last_fy': {
+
+    case "last_fy": {
       const lastFYStart = new Date(getFinancialYearStart(now));
       lastFYStart.setFullYear(lastFYStart.getFullYear() - 1);
       const lastFYEnd = new Date(getFinancialYearEnd(now));
@@ -248,23 +228,19 @@ function getDateRange(timeRange: string): DateRange {
         start: lastFYStart,
         end: lastFYEnd,
         points: 12,
-        interval: 'month'
+        interval: "month",
       };
     }
-    
-    default: // Default to last 6 months
+
+    default: {
       const defaultStart = new Date(now.getFullYear(), now.getMonth() - 6, 1);
-      return {
-        start: defaultStart,
-        end: now,
-        points: 6,
-        interval: 'month'
-      };
+      return { start: defaultStart, end: now, points: 6, interval: "month" };
+    }
   }
 }
 
 function formatDateForQuery(date: Date): string {
-  return date.toISOString().split('T')[0];
+  return date.toISOString().split("T")[0];
 }
 
 // ============================================================================
@@ -273,13 +249,12 @@ function formatDateForQuery(date: Date): string {
 export const getDashboardData = async (req: Request, res: Response) => {
   try {
     const startTime = Date.now();
-    const timeRange = (req.query.timeRange as string) || 'last_6_months';
-    
+    const timeRange = (req.query.timeRange as string) || "last_6_months";
+
     logger.info(`📊 Fetching dashboard data for timeRange: ${timeRange}`);
 
     const dateRange = getDateRange(timeRange);
 
-    // Run all queries in parallel for maximum performance
     const [
       kpisResult,
       statusDistributionResult,
@@ -288,7 +263,7 @@ export const getDashboardData = async (req: Request, res: Response) => {
       topProductsResult,
       lowStockResult,
       recentActivityResult,
-      forecastSummaryResult
+      forecastSummaryResult,
     ] = await Promise.all([
       fetchKPIs(dateRange, timeRange),
       fetchStatusDistribution(dateRange),
@@ -297,7 +272,7 @@ export const getDashboardData = async (req: Request, res: Response) => {
       fetchTopProducts(dateRange),
       fetchLowStockAlerts(),
       fetchRecentActivity(),
-      fetchForecastSummary()
+      fetchForecastSummary(),
     ]);
 
     const dashboardData = {
@@ -315,8 +290,8 @@ export const getDashboardData = async (req: Request, res: Response) => {
       timeRange: timeRange,
       dateRange: {
         start: formatDateForQuery(dateRange.start),
-        end: formatDateForQuery(dateRange.end)
-      }
+        end: formatDateForQuery(dateRange.end),
+      },
     };
 
     const duration = Date.now() - startTime;
@@ -325,59 +300,66 @@ export const getDashboardData = async (req: Request, res: Response) => {
     res.status(200).json({
       success: true,
       data: dashboardData,
-      meta: {
-        fetchDuration: duration,
-        timestamp: new Date().toISOString()
-      }
+      meta: { fetchDuration: duration, timestamp: new Date().toISOString() },
     });
-
   } catch (error: any) {
-    logger.error('❌ Error fetching dashboard data', { error: error.message });
+    logger.error("❌ Error fetching dashboard data", { error: error.message });
     res.status(error.statusCode || 500).json({
       success: false,
-      message: error.message || 'Failed to fetch dashboard data'
+      message: error.message || "Failed to fetch dashboard data",
     });
   }
 };
 
 // ============================================================================
-// BLOCK 5: KPIs Calculation - Reads Snapshots for Past Periods
+// BLOCK 5: KPIs Calculation
 // ============================================================================
-async function fetchKPIs(dateRange: DateRange, timeRange: string): Promise<DashboardKPIs> {
+async function fetchKPIs(
+  dateRange: DateRange,
+  timeRange: string
+): Promise<DashboardKPIs> {
   try {
     const startDate = formatDateForQuery(dateRange.start);
     const endDate = formatDateForQuery(dateRange.end);
 
-    // Determine if we need snapshot data (past periods)
-    const needsSnapshot = ['last_week', 'last_month', 'last_3_months', 'last_6_months', 'last_fy'].includes(timeRange);
-    
+    const needsSnapshot = [
+      "last_week",
+      "last_month",
+      "last_3_months",
+      "last_6_months",
+      "last_fy",
+    ].includes(timeRange);
+
     let snapshotKPIs: any = null;
 
-    // For past periods, try to fetch from snapshots
     if (needsSnapshot) {
-      const snapshotType = timeRange === 'last_week' ? 'weekly' : 'monthly';
-      
+      const snapshotType = timeRange === "last_week" ? "weekly" : "monthly";
+
       const { data: snapshots, error: snapError } = await supabase
-        .from('kpi_snapshots')
-        .select('*')
-        .eq('snapshot_type', snapshotType)
-        .gte('snapshot_date', startDate)
-        .lte('snapshot_date', endDate)
-        .order('snapshot_date', { ascending: false })
+        .from("kpi_snapshots")
+        .select("*")
+        .eq("snapshot_type", snapshotType)
+        .gte("snapshot_date", startDate)
+        .lte("snapshot_date", endDate)
+        .order("snapshot_date", { ascending: false })
         .limit(1);
 
       if (!snapError && snapshots && snapshots.length > 0) {
         snapshotKPIs = snapshots[0];
-        logger.info(`📸 Using snapshot data from: ${snapshotKPIs.period_label}`);
+        logger.info(
+          `📸 Using snapshot data from: ${snapshotKPIs.period_label}`
+        );
       } else {
-        logger.info(`📊 No snapshot found for ${timeRange}, calculating live data`);
+        logger.info(
+          `📊 No snapshot found for ${timeRange}, calculating live data`
+        );
       }
     }
 
-    // Cards 7-8: Always calculate from PO data (date range filtered)
     const { data: rangePOs, error: rangeError } = await supabase
-      .from('purchase_orders')
-      .select(`
+      .from("purchase_orders")
+      .select(
+        `
         id,
         customer_amount,
         system_amount,
@@ -387,45 +369,50 @@ async function fetchKPIs(dateRange: DateRange, timeRange: string): Promise<Dashb
         current_status,
         created_at,
         product:products(mins_per_shipper)
-      `)
-      .gte('po_received_date', startDate)
-      .lte('po_received_date', endDate);
+      `
+      )
+      .gte("po_received_date", startDate)
+      .lte("po_received_date", endDate);
 
     if (rangeError) {
-      logger.error('Error fetching range POs', { error: rangeError });
+      logger.error("Error fetching range POs", { error: rangeError });
       throw rangeError;
     }
 
-    // Calculate Cards 7-8 (Completed & Revenue in range)
     let completedInRange = 0;
     let revenueInRange = 0;
     let totalTurnaroundDays = 0;
     let completedCount = 0;
 
-    // Generate time buckets for sparklines
     const timeBuckets = generateTimeBuckets(dateRange);
-    const bucketData: { [key: string]: {
-      completed: number;
-      revenue: number;
-      turnaroundTotal: number;
-      turnaroundCount: number;
-    }} = {};
+    const bucketData: {
+      [key: string]: {
+        completed: number;
+        revenue: number;
+        turnaroundTotal: number;
+        turnaroundCount: number;
+      };
+    } = {};
 
-    timeBuckets.forEach(bucket => {
+    timeBuckets.forEach((bucket) => {
       bucketData[bucket] = {
         completed: 0,
         revenue: 0,
         turnaroundTotal: 0,
-        turnaroundCount: 0
+        turnaroundCount: 0,
       };
     });
 
     (rangePOs || []).forEach((po: any) => {
-      const status = po.current_status || 'Open';
-      const isCompleted = status.includes('Despatched') || status.includes('Completed') || status === 'Closed';
+      const status = po.current_status || "Open";
+      const isCompleted =
+        status.includes("Despatched") ||
+        status.includes("Completed") ||
+        status === "Closed";
       const orderValue = po.customer_amount || po.system_amount || 0;
-
-      const deliveryBucket = po.delivery_date ? getBucketKey(po.delivery_date, dateRange.interval) : null;
+      const deliveryBucket = po.delivery_date
+        ? getBucketKey(po.delivery_date, dateRange.interval)
+        : null;
 
       if (isCompleted) {
         completedInRange++;
@@ -436,15 +423,15 @@ async function fetchKPIs(dateRange: DateRange, timeRange: string): Promise<Dashb
           bucketData[deliveryBucket].revenue += orderValue;
         }
 
-        // Turnaround calculation
         if (po.delivery_date && po.po_received_date) {
           const received = new Date(po.po_received_date);
           const delivered = new Date(po.delivery_date);
-          const days = Math.ceil((delivered.getTime() - received.getTime()) / (1000 * 60 * 60 * 24));
+          const days = Math.ceil(
+            (delivered.getTime() - received.getTime()) / (1000 * 60 * 60 * 24)
+          );
           if (days > 0) {
             totalTurnaroundDays += days;
             completedCount++;
-
             if (deliveryBucket && bucketData[deliveryBucket]) {
               bucketData[deliveryBucket].turnaroundTotal += days;
               bucketData[deliveryBucket].turnaroundCount++;
@@ -454,24 +441,28 @@ async function fetchKPIs(dateRange: DateRange, timeRange: string): Promise<Dashb
       }
     });
 
-     // For past periods WITHOUT snapshot, return zeros with flag
-     if (needsSnapshot && !snapshotKPIs) {
-      logger.info(`⚠️ No snapshot available for ${timeRange} - returning zeros for Cards 1-6`);
-      
+    if (needsSnapshot && !snapshotKPIs) {
+      logger.info(
+        `⚠️ No snapshot available for ${timeRange} - returning zeros for Cards 1-6`
+      );
+
       const trends = {
         openOrders: timeBuckets.map(() => 0),
         openValue: timeBuckets.map(() => 0),
         workHours: timeBuckets.map(() => 0),
         attentionRequired: timeBuckets.map(() => 0),
         componentsAtRisk: timeBuckets.map(() => 0),
-        turnaroundDays: timeBuckets.map(b => {
+        turnaroundDays: timeBuckets.map((b) => {
           const data = bucketData[b];
-          return data && data.turnaroundCount > 0 
-            ? Math.round((data.turnaroundTotal / data.turnaroundCount) * 10) / 10 
+          return data && data.turnaroundCount > 0
+            ? Math.round((data.turnaroundTotal / data.turnaroundCount) * 10) /
+                10
             : 0;
         }),
-        completedMonthly: timeBuckets.map(b => bucketData[b]?.completed || 0),
-        revenueMonthly: timeBuckets.map(b => Math.round(bucketData[b]?.revenue || 0)),
+        completedMonthly: timeBuckets.map((b) => bucketData[b]?.completed || 0),
+        revenueMonthly: timeBuckets.map((b) =>
+          Math.round(bucketData[b]?.revenue || 0)
+        ),
       };
 
       return {
@@ -483,27 +474,35 @@ async function fetchKPIs(dateRange: DateRange, timeRange: string): Promise<Dashb
         averageTurnaroundDays: 0,
         completedThisMonth: completedInRange,
         revenueThisMonth: Math.round(revenueInRange * 100) / 100,
-        snapshotAvailable: false,  // Flag: no snapshot
-        trends
+        snapshotAvailable: false,
+        trends,
       };
     }
 
-    // If we have snapshot data, use it for Cards 1-6
     if (snapshotKPIs) {
       const trends = {
         openOrders: timeBuckets.map(() => snapshotKPIs.open_orders),
-        openValue: timeBuckets.map(() => Math.round(snapshotKPIs.open_order_value)),
+        openValue: timeBuckets.map(() =>
+          Math.round(snapshotKPIs.open_order_value)
+        ),
         workHours: timeBuckets.map(() => snapshotKPIs.work_hours_pending),
-        attentionRequired: timeBuckets.map(() => snapshotKPIs.attention_required),
-        componentsAtRisk: timeBuckets.map(() => snapshotKPIs.components_at_risk),
-        turnaroundDays: timeBuckets.map(b => {
+        attentionRequired: timeBuckets.map(
+          () => snapshotKPIs.attention_required
+        ),
+        componentsAtRisk: timeBuckets.map(
+          () => snapshotKPIs.components_at_risk
+        ),
+        turnaroundDays: timeBuckets.map((b) => {
           const data = bucketData[b];
-          return data && data.turnaroundCount > 0 
-            ? Math.round((data.turnaroundTotal / data.turnaroundCount) * 10) / 10 
+          return data && data.turnaroundCount > 0
+            ? Math.round((data.turnaroundTotal / data.turnaroundCount) * 10) /
+                10
             : snapshotKPIs.avg_turnaround_days;
         }),
-        completedMonthly: timeBuckets.map(b => bucketData[b]?.completed || 0),
-        revenueMonthly: timeBuckets.map(b => Math.round(bucketData[b]?.revenue || 0)),
+        completedMonthly: timeBuckets.map((b) => bucketData[b]?.completed || 0),
+        revenueMonthly: timeBuckets.map((b) =>
+          Math.round(bucketData[b]?.revenue || 0)
+        ),
       };
 
       return {
@@ -516,35 +515,36 @@ async function fetchKPIs(dateRange: DateRange, timeRange: string): Promise<Dashb
         completedThisMonth: completedInRange,
         revenueThisMonth: Math.round(revenueInRange * 100) / 100,
         snapshotAvailable: true,
-        trends
+        trends,
       };
     }
 
-    // No snapshot - calculate current live data for Cards 1-6
+    // Live data for Cards 1-6 (current/future ranges)
     const { data: currentPOs, error: currentError } = await supabase
-      .from('purchase_orders')
-      .select(`
+      .from("purchase_orders")
+      .select(
+        `
         id,
         customer_amount,
         system_amount,
         ordered_qty_shippers,
         current_status,
         product:products(mins_per_shipper)
-      `)
-      .not('current_status', 'ilike', '%Despatched%')
-      .not('current_status', 'ilike', '%Completed%')
-      .not('current_status', 'eq', 'Closed')
-      .not('current_status', 'eq', 'PO Canceled');
+      `
+      )
+      .not("current_status", "ilike", "%Despatched%")
+      .not("current_status", "ilike", "%Completed%")
+      .not("current_status", "eq", "Closed")
+      .not("current_status", "eq", "PO Canceled");
 
     if (currentError) {
-      logger.error('Error fetching current POs', { error: currentError });
+      logger.error("Error fetching current POs", { error: currentError });
       throw currentError;
     }
 
-    // Components at risk (always current state)
     const { data: sohData } = await supabase
-      .from('soh')
-      .select('stock_on_hand');
+      .from("soh")
+      .select("stock_on_hand");
 
     let totalOpenOrders = 0;
     let totalOpenValue = 0;
@@ -552,7 +552,7 @@ async function fetchKPIs(dateRange: DateRange, timeRange: string): Promise<Dashb
     let ordersRequiringAttention = 0;
 
     (currentPOs || []).forEach((po: any) => {
-      const status = po.current_status || 'Open';
+      const status = po.current_status || "Open";
       const orderValue = po.customer_amount || po.system_amount || 0;
       const minsPerShipper = po.product?.mins_per_shipper || 0;
       const workHours = ((po.ordered_qty_shippers || 0) * minsPerShipper) / 60;
@@ -561,7 +561,7 @@ async function fetchKPIs(dateRange: DateRange, timeRange: string): Promise<Dashb
       totalOpenValue += orderValue;
       totalOpenWorkHours += workHours;
 
-      if (status.includes('PO Check')) {
+      if (status.includes("PO Check")) {
         ordersRequiringAttention++;
       }
     });
@@ -570,26 +570,29 @@ async function fetchKPIs(dateRange: DateRange, timeRange: string): Promise<Dashb
       (item: any) => (item.stock_on_hand || 0) < 100
     ).length;
 
-    // Calculate average turnaround from range data
-    const avgTurnaroundDays = completedCount > 0 
-      ? Math.round((totalTurnaroundDays / completedCount) * 10) / 10 
-      : 0;
+    const avgTurnaroundDays =
+      completedCount > 0
+        ? Math.round((totalTurnaroundDays / completedCount) * 10) / 10
+        : 0;
 
-    // Build sparkline arrays
     const trends = {
       openOrders: timeBuckets.map(() => totalOpenOrders),
       openValue: timeBuckets.map(() => Math.round(totalOpenValue)),
-      workHours: timeBuckets.map(() => Math.round(totalOpenWorkHours * 10) / 10),
+      workHours: timeBuckets.map(
+        () => Math.round(totalOpenWorkHours * 10) / 10
+      ),
       attentionRequired: timeBuckets.map(() => ordersRequiringAttention),
       componentsAtRisk: timeBuckets.map(() => componentsAtRisk),
-      turnaroundDays: timeBuckets.map(b => {
+      turnaroundDays: timeBuckets.map((b) => {
         const data = bucketData[b];
-        return data && data.turnaroundCount > 0 
-          ? Math.round((data.turnaroundTotal / data.turnaroundCount) * 10) / 10 
+        return data && data.turnaroundCount > 0
+          ? Math.round((data.turnaroundTotal / data.turnaroundCount) * 10) / 10
           : avgTurnaroundDays;
       }),
-      completedMonthly: timeBuckets.map(b => bucketData[b]?.completed || 0),
-      revenueMonthly: timeBuckets.map(b => Math.round(bucketData[b]?.revenue || 0)),
+      completedMonthly: timeBuckets.map((b) => bucketData[b]?.completed || 0),
+      revenueMonthly: timeBuckets.map((b) =>
+        Math.round(bucketData[b]?.revenue || 0)
+      ),
     };
 
     return {
@@ -601,12 +604,11 @@ async function fetchKPIs(dateRange: DateRange, timeRange: string): Promise<Dashb
       averageTurnaroundDays: avgTurnaroundDays,
       completedThisMonth: completedInRange,
       revenueThisMonth: Math.round(revenueInRange * 100) / 100,
-      snapshotAvailable: true,  // Live data is always "available"
-      trends
+      snapshotAvailable: true,
+      trends,
     };
-
   } catch (error) {
-    logger.error('Error in fetchKPIs', { error });
+    logger.error("Error in fetchKPIs", { error });
     return {
       totalOpenOrders: 0,
       totalOpenValue: 0,
@@ -626,63 +628,69 @@ async function fetchKPIs(dateRange: DateRange, timeRange: string): Promise<Dashb
         turnaroundDays: [],
         completedMonthly: [],
         revenueMonthly: [],
-      }
+      },
     };
   }
 }
 
-// Helper: Generate time buckets
+// ============================================================================
+// BLOCK 5.5: Time Bucket Helpers
+// ============================================================================
+
 function generateTimeBuckets(dateRange: DateRange): string[] {
   const buckets: string[] = [];
   const current = new Date(dateRange.start);
-  
+
   while (current <= dateRange.end) {
     buckets.push(getBucketKey(current.toISOString(), dateRange.interval));
-    
     switch (dateRange.interval) {
-      case 'hour':
+      case "hour":
         current.setHours(current.getHours() + 1);
         break;
-      case 'day':
+      case "day":
         current.setDate(current.getDate() + 1);
         break;
-      case 'week':
+      case "week":
         current.setDate(current.getDate() + 7);
         break;
-      case 'month':
+      case "month":
         current.setMonth(current.getMonth() + 1);
         break;
     }
   }
-  
+
   return buckets.slice(0, dateRange.points);
 }
 
-// Helper: Get bucket key from date
-function getBucketKey(dateStr: string, interval: 'hour' | 'day' | 'week' | 'month'): string {
-  if (!dateStr) return '';
+function getBucketKey(
+  dateStr: string,
+  interval: "hour" | "day" | "week" | "month"
+): string {
+  if (!dateStr) return "";
   const date = new Date(dateStr);
-  
+
   switch (interval) {
-    case 'hour':
+    case "hour":
       return `${date.toISOString().substring(0, 13)}:00`;
-    case 'day':
+    case "day":
       return date.toISOString().substring(0, 10);
-    case 'week':
+    case "week": {
       const weekStart = new Date(date);
       weekStart.setDate(date.getDate() - date.getDay());
       return weekStart.toISOString().substring(0, 10);
-    case 'month':
+    }
+    case "month":
       return date.toISOString().substring(0, 7);
     default:
       return date.toISOString().substring(0, 10);
   }
 }
 
-// BLOCK 6: PO Status Distribution (Active Only) + Completed Total
-// UPDATE: Added dateRange parameter
-async function fetchStatusDistribution(dateRange: DateRange): Promise<{ 
-  activeStatuses: POStatusDistribution[]; 
+// ============================================================================
+// BLOCK 6: PO Status Distribution
+// ============================================================================
+async function fetchStatusDistribution(dateRange: DateRange): Promise<{
+  activeStatuses: POStatusDistribution[];
   completedTotal: number;
   activeTotal: number;
 }> {
@@ -690,12 +698,11 @@ async function fetchStatusDistribution(dateRange: DateRange): Promise<{
     const startDate = formatDateForQuery(dateRange.start);
     const endDate = formatDateForQuery(dateRange.end);
 
-    // UPDATE: Added date filtering
     const { data, error } = await supabase
-      .from('purchase_orders')
-      .select('current_status, customer_amount')
-      .gte('po_received_date', startDate)
-      .lte('po_received_date', endDate);
+      .from("purchase_orders")
+      .select("current_status, customer_amount")
+      .gte("po_received_date", startDate)
+      .lte("po_received_date", endDate);
 
     if (error) throw error;
 
@@ -704,10 +711,14 @@ async function fetchStatusDistribution(dateRange: DateRange): Promise<{
     let activeTotal = 0;
 
     (data || []).forEach((po: any) => {
-      const status = po.current_status || 'Open';
+      const status = po.current_status || "Open";
       const value = po.customer_amount || 0;
 
-      if (status.includes('Despatched') || status.includes('Completed') || status === 'Closed') {
+      if (
+        status.includes("Despatched") ||
+        status.includes("Completed") ||
+        status === "Closed"
+      ) {
         completedTotal++;
       } else {
         activeTotal++;
@@ -726,63 +737,82 @@ async function fetchStatusDistribution(dateRange: DateRange): Promise<{
       .map(([status, data]) => ({
         status,
         count: data.count,
-        value: Math.round(data.value * 100) / 100
+        value: Math.round(data.value * 100) / 100,
       }))
       .sort((a, b) => b.count - a.count);
 
     return { activeStatuses, completedTotal, activeTotal };
-
   } catch (error) {
-    logger.error('Error in fetchStatusDistribution', { error });
+    logger.error("Error in fetchStatusDistribution", { error });
     return { activeStatuses: [], completedTotal: 0, activeTotal: 0 };
   }
 }
 
-// BLOCK 7: Monthly Trends
-// UPDATE: Added dateRange parameter
-async function fetchMonthlyTrends(dateRange: DateRange): Promise<MonthlyTrend[]> {
+// ============================================================================
+// BLOCK 7: Monthly Trends — FIX: Dynamic month generation from dateRange
+// ============================================================================
+async function fetchMonthlyTrends(
+  dateRange: DateRange
+): Promise<MonthlyTrend[]> {
   try {
     const startDate = formatDateForQuery(dateRange.start);
     const endDate = formatDateForQuery(dateRange.end);
 
-    // UPDATE: Filter by date range
     const { data, error } = await supabase
-      .from('purchase_orders')
-      .select('po_received_date, delivery_date, customer_amount, current_status')
+      .from("purchase_orders")
+      .select(
+        "po_received_date, delivery_date, customer_amount, current_status"
+      )
       .or(`po_received_date.gte.${startDate},delivery_date.gte.${startDate}`)
-      .lte('po_received_date', endDate) // Ensure upper bound
-      .order('po_received_date', { ascending: true });
+      .lte("po_received_date", endDate)
+      .order("po_received_date", { ascending: true });
 
     if (error) throw error;
 
-    const monthlyMap = new Map<string, { 
-      received: number; 
-      despatched: number; 
-      revenue: number 
-    }>();
+    const monthlyMap = new Map<
+      string,
+      {
+        received: number;
+        despatched: number;
+        revenue: number;
+      }
+    >();
 
-    // Initialize months based on the range (simplification: uses current logic but dynamic start)
-    // Ideally, you would loop through dateRange, but for quick fix:
-    for (let i = 5; i >= 0; i--) {
-      const date = new Date();
-      date.setMonth(date.getMonth() - i);
-      const monthKey = date.toISOString().substring(0, 7);
+    // ─── FIX: Dynamically generate months from dateRange.start to dateRange.end ───
+    // Previously this was hardcoded to always generate the last 6 months
+    // from today, ignoring whatever dateRange was actually passed in.
+    // Now it correctly walks from the range start to end month by month.
+    const cursor = new Date(
+      dateRange.start.getFullYear(),
+      dateRange.start.getMonth(),
+      1
+    );
+    const rangeEnd = new Date(
+      dateRange.end.getFullYear(),
+      dateRange.end.getMonth(),
+      1
+    );
+
+    while (cursor <= rangeEnd) {
+      const monthKey = cursor.toISOString().substring(0, 7);
       monthlyMap.set(monthKey, { received: 0, despatched: 0, revenue: 0 });
+      cursor.setMonth(cursor.getMonth() + 1);
     }
+    // ─────────────────────────────────────────────────────────────────────────────
 
     (data || []).forEach((po: any) => {
       if (po.po_received_date) {
         const receivedMonthKey = po.po_received_date.substring(0, 7);
         if (monthlyMap.has(receivedMonthKey)) {
-          const existing = monthlyMap.get(receivedMonthKey)!;
-          existing.received++;
+          monthlyMap.get(receivedMonthKey)!.received++;
         }
       }
 
-      const status = po.current_status || '';
-      const isCompleted = status.includes('Despatched') || 
-                          status.includes('Completed') || 
-                          status === 'Closed';
+      const status = po.current_status || "";
+      const isCompleted =
+        status.includes("Despatched") ||
+        status.includes("Completed") ||
+        status === "Closed";
 
       if (po.delivery_date && isCompleted) {
         const deliveryMonthKey = po.delivery_date.substring(0, 7);
@@ -797,38 +827,37 @@ async function fetchMonthlyTrends(dateRange: DateRange): Promise<MonthlyTrend[]>
     return Array.from(monthlyMap.entries())
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([month, data]) => ({
-        month: formatMonth(month + '-01'),
+        month: formatMonth(month + "-01"),
         ordersReceived: data.received,
         ordersDespatched: data.despatched,
-        revenue: Math.round(data.revenue * 100) / 100
+        revenue: Math.round(data.revenue * 100) / 100,
       }));
-
   } catch (error) {
-    logger.error('Error in fetchMonthlyTrends', { error });
+    logger.error("Error in fetchMonthlyTrends", { error });
     return [];
   }
 }
 
+// ============================================================================
 // BLOCK 8: Top Customers
-// UPDATE: Added dateRange parameter
+// ============================================================================
 async function fetchTopCustomers(dateRange: DateRange): Promise<TopCustomer[]> {
   try {
     const startDate = formatDateForQuery(dateRange.start);
     const endDate = formatDateForQuery(dateRange.end);
 
-    // UPDATE: Added date filter
     const { data, error } = await supabase
-      .from('purchase_orders')
-      .select('customer_name, customer_amount')
-      .gte('po_received_date', startDate)
-      .lte('po_received_date', endDate);
+      .from("purchase_orders")
+      .select("customer_name, customer_amount")
+      .gte("po_received_date", startDate)
+      .lte("po_received_date", endDate);
 
     if (error) throw error;
 
     const customerMap = new Map<string, { count: number; value: number }>();
 
     (data || []).forEach((po: any) => {
-      const customer = po.customer_name || 'Unknown';
+      const customer = po.customer_name || "Unknown";
       const value = po.customer_amount || 0;
 
       if (customerMap.has(customer)) {
@@ -844,45 +873,49 @@ async function fetchTopCustomers(dateRange: DateRange): Promise<TopCustomer[]> {
       .map(([name, data]) => ({
         customerName: name,
         orderCount: data.count,
-        totalValue: Math.round(data.value * 100) / 100
+        totalValue: Math.round(data.value * 100) / 100,
       }))
       .sort((a, b) => b.totalValue - a.totalValue)
       .slice(0, 5);
-
   } catch (error) {
-    logger.error('Error in fetchTopCustomers', { error });
+    logger.error("Error in fetchTopCustomers", { error });
     return [];
   }
 }
 
+// ============================================================================
 // BLOCK 9: Top Products
-// UPDATE: Added dateRange parameter
+// ============================================================================
 async function fetchTopProducts(dateRange: DateRange): Promise<TopProduct[]> {
   try {
     const startDate = formatDateForQuery(dateRange.start);
     const endDate = formatDateForQuery(dateRange.end);
 
-    // UPDATE: Added date filter
     const { data, error } = await supabase
-      .from('purchase_orders')
-      .select(`
+      .from("purchase_orders")
+      .select(
+        `
         ordered_qty_pieces,
         product:products(product_code, description)
-      `)
-      .gte('po_received_date', startDate)
-      .lte('po_received_date', endDate);
+      `
+      )
+      .gte("po_received_date", startDate)
+      .lte("po_received_date", endDate);
 
     if (error) throw error;
 
-    const productMap = new Map<string, { 
-      description: string; 
-      count: number; 
-      quantity: number 
-    }>();
+    const productMap = new Map<
+      string,
+      {
+        description: string;
+        count: number;
+        quantity: number;
+      }
+    >();
 
     (data || []).forEach((po: any) => {
-      const productCode = po.product?.product_code || 'Unknown';
-      const description = po.product?.description || '';
+      const productCode = po.product?.product_code || "Unknown";
+      const description = po.product?.description || "";
       const quantity = po.ordered_qty_pieces || 0;
 
       if (productMap.has(productCode)) {
@@ -899,79 +932,80 @@ async function fetchTopProducts(dateRange: DateRange): Promise<TopProduct[]> {
         productCode: code,
         description: data.description,
         orderCount: data.count,
-        totalQuantity: data.quantity
+        totalQuantity: data.quantity,
       }))
       .sort((a, b) => b.orderCount - a.orderCount)
       .slice(0, 5);
-
   } catch (error) {
-    logger.error('Error in fetchTopProducts', { error });
+    logger.error("Error in fetchTopProducts", { error });
     return [];
   }
 }
 
 // ============================================================================
-// BLOCK 10: Low Stock Alerts
+// BLOCK 10: Low Stock Alerts (no date filter — always current state)
 // ============================================================================
 async function fetchLowStockAlerts(): Promise<LowStockAlert[]> {
   try {
     const { data, error } = await supabase
-      .from('soh')
-      .select('product_id, description, stock_on_hand')
-      .lt('stock_on_hand', 100) // Items with stock < 100
-      .order('stock_on_hand', { ascending: true })
+      .from("soh")
+      .select("product_id, description, stock_on_hand")
+      .lt("stock_on_hand", 100)
+      .order("stock_on_hand", { ascending: true })
       .limit(10);
 
     if (error) throw error;
 
     return (data || []).map((item: any) => ({
-      productId: item.product_id || '',
-      description: item.description || '',
+      productId: item.product_id || "",
+      description: item.description || "",
       stockOnHand: item.stock_on_hand || 0,
-      safetyStock: 100, // Default safety stock threshold
-      deficit: Math.max(0, 100 - (item.stock_on_hand || 0))
+      safetyStock: 100,
+      deficit: Math.max(0, 100 - (item.stock_on_hand || 0)),
     }));
-
   } catch (error) {
-    logger.error('Error in fetchLowStockAlerts', { error });
+    logger.error("Error in fetchLowStockAlerts", { error });
     return [];
   }
 }
 
 // ============================================================================
-// BLOCK 11: Recent Activity
+// BLOCK 11: Recent Activity (no date filter — always most recent)
 // ============================================================================
 async function fetchRecentActivity(): Promise<RecentActivity[]> {
   try {
     const { data, error } = await supabase
-      .from('purchase_orders')
-      .select(`
+      .from("purchase_orders")
+      .select(
+        `
         id,
         po_number,
         customer_name,
         customer_amount,
         updated_at,
         statuses:po_status_history(status)
-      `)
-      .order('updated_at', { ascending: false })
+      `
+      )
+      .order("updated_at", { ascending: false })
       .limit(10);
 
     if (error) throw error;
 
     return (data || []).map((po: any) => {
-      const statuses = po.statuses?.map((s: any) => s.status) || ['Open'];
+      const statuses = po.statuses?.map((s: any) => s.status) || ["Open"];
       return {
         id: po.id,
-        type: 'purchase_order',
+        type: "purchase_order",
         title: `PO ${po.po_number}`,
-        description: `${po.customer_name} - $${(po.customer_amount || 0).toFixed(2)}`,
+        description: `${po.customer_name} - $${(
+          po.customer_amount || 0
+        ).toFixed(2)}`,
         timestamp: po.updated_at,
-        status: statuses[statuses.length - 1] || 'Open'
+        status: statuses[statuses.length - 1] || "Open",
       };
     });
-
   } catch (error) {
-    logger.error('Error in fetchRecentActivity', { error });
+    logger.error("Error in fetchRecentActivity", { error });
     return [];
   }
 }
@@ -986,8 +1020,8 @@ async function fetchForecastSummary(): Promise<{
 }> {
   try {
     const { data, error } = await supabase
-      .from('forecasts')
-      .select('product_code, quantity, forecast_date');
+      .from("forecasts")
+      .select("product_code, quantity, forecast_date");
 
     if (error) throw error;
 
@@ -995,21 +1029,25 @@ async function fetchForecastSummary(): Promise<{
       return {
         totalForecastedUnits: 0,
         monthsCovered: 0,
-        topForecastedProduct: 'N/A'
+        topForecastedProduct: "N/A",
       };
     }
 
-    const totalUnits = data.reduce((sum, item) => sum + (item.quantity || 0), 0);
-    const uniqueMonths = new Set(data.map(item => item.forecast_date?.substring(0, 7)));
+    const totalUnits = data.reduce(
+      (sum, item) => sum + (item.quantity || 0),
+      0
+    );
+    const uniqueMonths = new Set(
+      data.map((item) => item.forecast_date?.substring(0, 7))
+    );
 
-    // Find top forecasted product
     const productTotals = new Map<string, number>();
-    data.forEach(item => {
+    data.forEach((item) => {
       const current = productTotals.get(item.product_code) || 0;
       productTotals.set(item.product_code, current + (item.quantity || 0));
     });
 
-    let topProduct = 'N/A';
+    let topProduct = "N/A";
     let maxQuantity = 0;
     productTotals.forEach((quantity, product) => {
       if (quantity > maxQuantity) {
@@ -1021,39 +1059,33 @@ async function fetchForecastSummary(): Promise<{
     return {
       totalForecastedUnits: totalUnits,
       monthsCovered: uniqueMonths.size,
-      topForecastedProduct: topProduct
+      topForecastedProduct: topProduct,
     };
-
   } catch (error) {
-    logger.error('Error in fetchForecastSummary', { error });
+    logger.error("Error in fetchForecastSummary", { error });
     return {
       totalForecastedUnits: 0,
       monthsCovered: 0,
-      topForecastedProduct: 'N/A'
+      topForecastedProduct: "N/A",
     };
   }
 }
 
-// BLOCK 13: Quick Stats Endpoint (Lightweight)
+// ============================================================================
+// BLOCK 13: Quick Stats Endpoint
+// ============================================================================
 export const getQuickStats = async (req: Request, res: Response) => {
   try {
-    logger.info('📊 Fetching quick stats...');
+    logger.info("📊 Fetching quick stats...");
 
-    // FIX: Generate a default date range (e.g., last 6 months) to pass to fetchKPIs
-    const defaultRange = getDateRange('last_6_months');
-    
-    const kpis = await fetchKPIs(defaultRange, 'last_6_months');
+    const defaultRange = getDateRange("last_6_months");
+    const kpis = await fetchKPIs(defaultRange, "last_6_months");
 
-    res.status(200).json({
-      success: true,
-      data: kpis
-    });
-
+    res.status(200).json({ success: true, data: kpis });
   } catch (error: any) {
-    logger.error('Error fetching quick stats', { error: error.message });
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch quick stats'
-    });
+    logger.error("Error fetching quick stats", { error: error.message });
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to fetch quick stats" });
   }
 };
