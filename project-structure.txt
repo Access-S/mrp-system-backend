@@ -1,43 +1,47 @@
 .
-├── database
-│   ├── migrations
-│   │   └── 001_create_soh_table.sql
-│   └── schema
-│       ├── Complete MRP Schema.sql
-│       ├── functions.sql
-│       └── tables.sql
-├── src
-│   ├── config
-│   │   └── supabase.ts
-│   ├── controllers
-│   │   ├── bom.controller.ts
-│   │   ├── dashboard.controller.ts
-│   │   ├── forecast.controller.ts
-│   │   ├── import.controller.ts
-│   │   ├── product.controller.ts
-│   │   ├── purchaseOrder.controller.ts
-│   │   └── soh.controller.ts
-│   ├── middleware
-│   │   ├── errorHandler.ts
-│   │   └── validation.ts
-│   ├── routes
-│   │   ├── bom.routes.ts
-│   │   ├── dashboard.routes.ts
-│   │   ├── forecast.routes.ts
-│   │   ├── import.routes.ts
-│   │   ├── product.routes.ts
-│   │   ├── purchaseOrder.routes.ts
-│   │   └── soh.routes.ts
-│   ├── utils
-│   │   ├── asyncHandler.ts
-│   │   └── logger.ts
-│   └── server.ts
-├── health.routes.ts
-├── package-lock.json
-├── package.json
-├── project-structure.txt
-├── render.yaml
-├── tsconfig.json
-└── update-structure.sh
-
-10 directories, 31 files
+database
+database/migrations
+database/migrations/001_create_soh_table.sql
+database/schema
+database/schema/Complete MRP Schema.sql
+database/schema/functions.sql
+database/schema/kpi_snapshots.sql
+database/schema/tables.sql
+.env
+.git
+.gitignore
+health.routes.ts
+package.json
+package-lock.json
+project-structure.txt
+render.yaml
+src
+src/config
+src/config/supabase.ts
+src/controllers
+src/controllers/bom.controller.ts
+src/controllers/dashboard.controller.ts
+src/controllers/forecast.controller.ts
+src/controllers/import.controller.ts
+src/controllers/product.controller.ts
+src/controllers/purchaseOrder.controller.ts
+src/controllers/snapshot.controller.ts
+src/controllers/soh.controller.ts
+src/middleware
+src/middleware/errorHandler.ts
+src/middleware/validation.ts
+src/routes
+src/routes/bom.routes.ts
+src/routes/dashboard.routes.ts
+src/routes/forecast.routes.ts
+src/routes/import.routes.ts
+src/routes/product.routes.ts
+src/routes/purchaseOrder.routes.ts
+src/routes/snapshot.routes.ts
+src/routes/soh.routes.ts
+src/server.ts
+src/utils
+src/utils/asyncHandler.ts
+src/utils/logger.ts
+tsconfig.json
+update-structure.sh
