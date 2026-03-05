@@ -99,10 +99,6 @@ const validateProductExists = async (productCode: string): Promise<boolean> => {
 
 // ============== BLOCK 3: Core Processing Function ==============
 
-/**
- * Processes JSON forecast data with flexible date parsing and product validation
- * Returns structured result with imported records and items pending user review
- */
 async function processJsonForecastData(jsonData: any[], importBatchId: string): Promise<{
   success: boolean;
   message: string;
@@ -117,10 +113,7 @@ async function processJsonForecastData(jsonData: any[], importBatchId: string): 
   }>;
   debug?: any;
 }> {
-  logger.info('Processing JSON forecast data', { 
-    recordCount: jsonData.length, 
-    importBatchId 
-  });
+  logger.info('Processing JSON forecast data', { recordCount: jsonData.length, importBatchId });
 
   if (!jsonData || jsonData.length === 0) {
     throw createError('No data found in JSON.', 400);
@@ -137,7 +130,6 @@ async function processJsonForecastData(jsonData: any[], importBatchId: string): 
     throw createError("Could not find a 'Product' column in the data.", 400);
   }
 
-  // Track results for review flow
   const forecastsToInsert: Array<{
     product_code: string;
     description: string;
@@ -155,7 +147,10 @@ async function processJsonForecastData(jsonData: any[], importBatchId: string): 
     reason: 'unknown_product' | 'invalid_date';
   }> = [];
 
-  // Process each JSON row
+  // Track total date columns for response calculation
+  let totalDateColumns = 0;
+  let rowsWithDates = 0;
+
   for (let rowIndex = 0; rowIndex < jsonData.length; rowIndex++) {
     const row = jsonData[rowIndex];
     const productCode = row[productCodeHeader]?.toString().trim();
@@ -166,8 +161,8 @@ async function processJsonForecastData(jsonData: any[], importBatchId: string): 
     const rowForecasts: Record<string, number> = {};
     let hasValidDates = false;
     let hasInvalidDates = false;
+    let dateColumnCount = 0;
 
-    // Process each header that might be a date column
     for (const header of headers) {
       if (header === productCodeHeader || header === descriptionHeader) continue;
       
@@ -179,35 +174,29 @@ async function processJsonForecastData(jsonData: any[], importBatchId: string): 
         if (!isNaN(quantity) && quantity >= 0) {
           rowForecasts[parsedDate] = quantity;
           hasValidDates = true;
+          dateColumnCount++;
         }
       } else {
-        // Header didn't match any known date format - flag for review
         hasInvalidDates = true;
         logger.debug('Unparseable date header', { header: headerStr, row: rowIndex + 2 });
       }
     }
 
-    // Check if product exists (async validation)
     const productExists = await validateProductExists(productCode);
     
     if (!productExists) {
-      // Add to review items: unknown product
       reviewItems.push({
-        row_number: rowIndex + 2, // +2 for 1-indexed + header row
+        row_number: rowIndex + 2,
         product_code: productCode,
         description: description || '',
         forecast_values: rowForecasts,
         reason: 'unknown_product'
       });
-      logger.info('Unknown product code flagged for review', { 
-        productCode, 
-        row: rowIndex + 2 
-      });
-      continue; // Skip inserting until user approves
+      logger.info('Unknown product code flagged for review', { productCode, row: rowIndex + 2 });
+      continue;
     }
     
     if (!hasValidDates && hasInvalidDates) {
-      // Add to review items: no valid dates found
       reviewItems.push({
         row_number: rowIndex + 2,
         product_code: productCode,
@@ -215,32 +204,30 @@ async function processJsonForecastData(jsonData: any[], importBatchId: string): 
         forecast_values: rowForecasts,
         reason: 'invalid_date'
       });
-      logger.info('Row with unparseable dates flagged for review', { 
-        productCode, 
-        row: rowIndex + 2 
-      });
+      logger.info('Row with unparseable dates flagged for review', { productCode, row: rowIndex + 2 });
       continue;
     }
 
-    // Add valid forecasts to insert queue
     for (const [forecastDate, quantity] of Object.entries(rowForecasts)) {
       forecastsToInsert.push({
         product_code: productCode,
-        description: description, // Keep for backward compat; will be deprecated
+        description: description,
         forecast_date: forecastDate,
         quantity: quantity,
         import_batch_id: importBatchId,
         is_active: true
       });
     }
+
+    if (dateColumnCount > 0) {
+      totalDateColumns += dateColumnCount;
+      rowsWithDates++;
+    }
   }
 
-  // === SOFT-ARCHIVE PREVIOUS ACTIVE FORECASTS ===
-  // Instead of hard delete, archive previous active records for same product+date
   if (forecastsToInsert.length > 0) {
     logger.info('Archiving previous active forecasts for updated product+date combinations');
     
-    // Get unique product+date combinations from new imports
     const uniqueCombinations = [...new Set(
       forecastsToInsert.map(f => `${f.product_code}|${f.forecast_date}`)
     )];
@@ -248,7 +235,6 @@ async function processJsonForecastData(jsonData: any[], importBatchId: string): 
     for (const combo of uniqueCombinations) {
       const [productCode, forecastDate] = combo.split('|');
       
-      // Use the helper function to archive old records
       const { error: archiveError } = await supabase.rpc('archive_forecasts_for_import', {
         p_product_code: productCode,
         p_forecast_date: forecastDate,
@@ -256,22 +242,14 @@ async function processJsonForecastData(jsonData: any[], importBatchId: string): 
       });
       
       if (archiveError) {
-        logger.error('Error archiving old forecasts', { 
-          productCode, 
-          forecastDate, 
-          error: archiveError 
-        });
-        // Continue anyway - don't block import if archiving fails
+        logger.error('Error archiving old forecasts', { productCode, forecastDate, error: archiveError });
       }
     }
   }
 
-  // === INSERT NEW FORECAST RECORDS ===
   logger.info(`Inserting ${forecastsToInsert.length} new forecast records`);
   if (forecastsToInsert.length > 0) {
-    const { error: insertError } = await supabase
-      .from('forecasts')
-      .insert(forecastsToInsert);
+    const { error: insertError } = await supabase.from('forecasts').insert(forecastsToInsert);
     
     if (insertError) {
       logger.error('Supabase error inserting forecasts', { error: insertError });
@@ -279,11 +257,14 @@ async function processJsonForecastData(jsonData: any[], importBatchId: string): 
     }
   }
 
-  // === BUILD RESPONSE ===
+  // Calculate imported row count (total records / avg columns per row)
+  const avgColumnsPerRow = rowsWithDates > 0 ? totalDateColumns / rowsWithDates : 1;
+  const importedRowCount = Math.round(forecastsToInsert.length / Math.max(1, avgColumnsPerRow));
+
   const response: any = {
     success: true,
-    message: `Processed ${jsonData.length} rows. ${forecastsToInsert.length} forecasts imported.`,
-    imported: forecastsToInsert.length / Math.max(1, Object.keys(rowForecasts).length), // Approx row count
+    message: `Processed ${jsonData.length} rows. ${importedRowCount} forecasts imported.`,
+    imported: importedRowCount,
     pending_review: reviewItems.length,
     review_items: reviewItems,
     debug: {
