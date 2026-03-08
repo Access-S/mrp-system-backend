@@ -5,7 +5,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import Joi from 'joi';
 import { getForecasts, uploadForecasts, finalizeForecastReview } from '../controllers/forecast.controller';
-import { validateQuery } from '../middleware/validation';
+import { validateQuery, validateRequest } from '../middleware/validation';
 import { asyncHandler } from '../utils/asyncHandler';
 import { createError } from '../middleware/errorHandler';
 
@@ -68,7 +68,7 @@ router.post('/upload',
 );
 
 router.post('/review', 
-  validateQuery(reviewSchema),
+  validateRequest(reviewSchema),
   asyncHandler(finalizeForecastReview)
 );
 
