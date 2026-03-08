@@ -12,27 +12,28 @@ import { createError } from '../middleware/errorHandler';
 /**
  * Flexible date parser: Supports multiple Excel header formats
  * Formats supported:
- * - DD.MM.YYYY (e.g., "02.03.2026")
+ * - DD.MM.YYYY (e.g., "02.03.2026") - Returns actual date, not first of month
  * - MMM-YY / MMM-YYYY (e.g., "Jul-25", "Jul-2025")
  * - MMM YYYY (e.g., "Jul 2025")
  * - YYYY-MM (e.g., "2026-03")
+ * - YYYY-MM-DD (e.g., "2026-03-02")
  * 
  * @param header - The column header string from Excel
- * @returns ISO date string (YYYY-MM-DD) for first day of month, or null if unparseable
+ * @returns ISO date string (YYYY-MM-DD), or null if unparseable
  */
 const parseFlexibleDateHeader = (header: string): string | null => {
   if (typeof header !== 'string') return null;
   
   const cleanHeader = header.trim();
   
-  // Pattern 1: DD.MM.YYYY (e.g., "02.03.2026")
+  // Pattern 1: DD.MM.YYYY (e.g., "02.03.2026") - Keep exact date
   const ddMmYyyyMatch = cleanHeader.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
   if (ddMmYyyyMatch) {
     const [, day, month, year] = ddMmYyyyMatch;
     const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
     if (!isNaN(date.getTime())) {
-      // Return first day of that month for consistency
-      return new Date(parseInt(year), parseInt(month) - 1, 1).toISOString().split('T')[0];
+      // Return the actual date, not first of month
+      return date.toISOString().split('T')[0];
     }
   }
   
@@ -62,6 +63,16 @@ const parseFlexibleDateHeader = (header: string): string | null => {
   if (yyyyMmMatch) {
     const [, year, month] = yyyyMmMatch;
     const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+    if (!isNaN(date.getTime())) {
+      return date.toISOString().split('T')[0];
+    }
+  }
+  
+  // Pattern 4: YYYY-MM-DD (e.g., "2026-03-02")
+  const yyyyMmDdMatch = cleanHeader.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (yyyyMmDdMatch) {
+    const [, year, month, day] = yyyyMmDdMatch;
+    const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
     if (!isNaN(date.getTime())) {
       return date.toISOString().split('T')[0];
     }
