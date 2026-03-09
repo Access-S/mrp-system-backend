@@ -299,17 +299,47 @@ export const getSoh = asyncHandler(async (req: Request, res: Response) => {
     query = query.or(`product_id.ilike.%${search.trim()}%,description.ilike.%${search.trim()}%`);
   }
 
-  const { data, error } = await query;
+  const { data: sohData, error } = await query;
 
   if (error) {
     logger.error('Supabase error fetching SOH', { error });
     throw createError('Failed to fetch SOH records', 500);
   }
 
+  // Fetch parts data for stock value calculation
+  const productIds = sohData?.map(item => item.product_id).filter(id => id) || [];
+  let partsMap = new Map<string, { unit_cost: number }>();
+
+  if (productIds.length > 0) {
+    const { data: partsData } = await supabase
+      .from('parts')
+      .select('product_id, unit_cost')
+      .in('product_id', productIds);
+
+    if (partsData) {
+      partsData.forEach(part => {
+        partsMap.set(part.product_id, { unit_cost: part.unit_cost || 0 });
+      });
+    }
+  }
+
+  // Add stock_value to each record
+  const enrichedRecords = sohData?.map(record => {
+    const part = partsMap.get(record.product_id);
+    const unitCost = part?.unit_cost || 0;
+    const stockValue = record.stock_on_hand * unitCost;
+
+    return {
+      ...record,
+      stock_value: stockValue
+    };
+  }) || [];
+
   // Calculate summary
-  const totalRecords = data?.length || 0;
-  const totalStock = data?.reduce((sum, item) => sum + (item.stock_on_hand || 0), 0) || 0;
-  const zeroStockCount = data?.filter(item => item.stock_on_hand === 0).length || 0;
+  const totalRecords = enrichedRecords.length;
+  const totalStock = enrichedRecords.reduce((sum, item) => sum + (item.stock_on_hand || 0), 0);
+  const totalStockValue = enrichedRecords.reduce((sum, item) => sum + (item.stock_value || 0), 0);
+  const zeroStockCount = enrichedRecords.filter(item => item.stock_on_hand === 0).length;
 
   logger.info('Successfully fetched SOH records', { count: totalRecords });
 
@@ -318,8 +348,9 @@ export const getSoh = asyncHandler(async (req: Request, res: Response) => {
     summary: {
       totalRecords,
       totalStock,
+      totalStockValue,
       zeroStockCount
     },
-    data: data || []
+    data: enrichedRecords
   });
 });
