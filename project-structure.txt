@@ -4,6 +4,7 @@
 |____update-structure.sh
 |____render.yaml
 |____project-structure.txt
+|____Architecture_Blueprint.md
 |____.git
 |____package.json
 |____src
@@ -37,6 +38,7 @@
 |____package-lock.json
 |____database
 | |____migrations
+| | |____20260306_add_forecast_history.sql
 | | |____001_create_soh_table.sql
 | |____schema
 | | |____kpi_snapshots.sql
