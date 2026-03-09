@@ -323,6 +323,3 @@ export const getSoh = asyncHandler(async (req: Request, res: Response) => {
     data: data || []
   });
 });
-
-// ============== BLOCK 7: Export ==============
-export { uploadSoh, getSoh };
