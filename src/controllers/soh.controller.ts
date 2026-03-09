@@ -1,383 +1,328 @@
-//src/controllers/soh.controller.ts
+// src/controllers/soh.controller.ts
 
-// BLOCK 1: Imports and Dependencies
+// ============== BLOCK 1: Imports ==============
 import { Request, Response } from 'express';
 import { supabase } from '../config/supabase';
+import { asyncHandler } from '../utils/asyncHandler';
 import logger from '../utils/logger';
 import { createError } from '../middleware/errorHandler';
 import * as XLSX from 'xlsx';
 
-// BLOCK 2: Get All SOH Records Controller
-export const getAllSoh = async (req: Request, res: Response) => {
-  try {
-    logger.info('Fetching all SOH records');
-    
-    const { data, error } = await supabase
+// ============== BLOCK 2: Types & Interfaces ==============
+interface ColumnMapping {
+  productId: number | null;
+  description: number | null;
+  stockOnHand: number | null;
+}
+
+interface SohRecord {
+  product_id: string;
+  description: string;
+  stock_on_hand: number;
+  import_batch_id: string;
+  import_source: string;
+  is_active: boolean;
+}
+
+// ============== BLOCK 3: Auto-Detect Column Mapping ==============
+const autoDetectColumns = (headers: string[]): ColumnMapping => {
+  const mapping: ColumnMapping = {
+    productId: null,
+    description: null,
+    stockOnHand: null
+  };
+
+  headers.forEach((header, index) => {
+    const normalizedHeader = header.toLowerCase().trim();
+
+    // Product ID detection
+    if (
+      normalizedHeader.includes('product') ||
+      normalizedHeader.includes('sku') ||
+      normalizedHeader.includes('item') ||
+      normalizedHeader === 'id' ||
+      normalizedHeader === 'code'
+    ) {
+      if (mapping.productId === null) {
+        mapping.productId = index;
+      }
+    }
+
+    // Description detection
+    if (
+      normalizedHeader.includes('description') ||
+      normalizedHeader.includes('desc') ||
+      normalizedHeader.includes('name')
+    ) {
+      if (mapping.description === null) {
+        mapping.description = index;
+      }
+    }
+
+    // Stock on Hand detection
+    if (
+      normalizedHeader.includes('stock') ||
+      normalizedHeader.includes('soh') ||
+      normalizedHeader.includes('qty') ||
+      normalizedHeader.includes('quantity') ||
+      normalizedHeader.includes('on hand') ||
+      normalizedHeader.includes('onhand') ||
+      normalizedHeader.includes('available')
+    ) {
+      if (mapping.stockOnHand === null) {
+        mapping.stockOnHand = index;
+      }
+    }
+  });
+
+  return mapping;
+};
+
+// ============== BLOCK 4: Process SOH Data ==============
+const processSohData = async (
+  jsonData: any[][],
+  headers: string[],
+  mapping: ColumnMapping,
+  importBatchId: string,
+  filename: string
+): Promise<{
+  success: boolean;
+  message: string;
+  imported: number;
+  skipped: number;
+  archived: number;
+}> => {
+  const startTime = Date.now();
+  logger.info('Processing SOH data', { recordCount: jsonData.length, importBatchId });
+
+  // Validate required columns detected
+  if (mapping.productId === null) {
+    throw createError('Could not detect Product ID column. Expected headers containing: product, sku, item, id, code', 400);
+  }
+
+  if (mapping.stockOnHand === null) {
+    throw createError('Could not detect Stock on Hand column. Expected headers containing: stock, soh, qty, quantity, on hand, available', 400);
+  }
+
+  logger.info('Column mapping detected', {
+    productId: headers[mapping.productId],
+    description: mapping.description !== null ? headers[mapping.description] : 'Not found',
+    stockOnHand: headers[mapping.stockOnHand!]
+  });
+
+  // Step 1: Archive all existing active records
+  const { data: archivedData, error: archiveError } = await supabase
+    .from('soh')
+    .update({
+      is_active: false,
+      archived_at: new Date().toISOString()
+    })
+    .eq('is_active', true)
+    .select('id');
+
+  if (archiveError) {
+    logger.warn('Error archiving existing SOH records (non-fatal)', { error: archiveError.message });
+  }
+
+  const archivedCount = archivedData?.length || 0;
+  logger.info(`Archived ${archivedCount} existing SOH records`);
+
+  // Step 2: Prepare new records
+  const recordsToInsert: SohRecord[] = [];
+  let skippedCount = 0;
+
+  for (let i = 0; i < jsonData.length; i++) {
+    const row = jsonData[i];
+
+    // Get product ID
+    const productId = row[mapping.productId!]?.toString().trim();
+
+    // Skip empty rows
+    if (!productId || productId === '') {
+      skippedCount++;
+      continue;
+    }
+
+    // Get description (optional)
+    const description = mapping.description !== null
+      ? row[mapping.description]?.toString().trim() || ''
+      : '';
+
+    // Get stock on hand
+    const stockValue = row[mapping.stockOnHand!];
+    const stockOnHand = parseFloat(stockValue) || 0;
+
+    recordsToInsert.push({
+      product_id: productId,
+      description: description,
+      stock_on_hand: stockOnHand,
+      import_batch_id: importBatchId,
+      import_source: filename,
+      is_active: true
+    });
+  }
+
+  logger.info('Records prepared for insertion', {
+    total: recordsToInsert.length,
+    skipped: skippedCount
+  });
+
+  // Step 3: Insert in chunks
+  const CHUNK_SIZE = 500;
+  let insertedCount = 0;
+
+  for (let i = 0; i < recordsToInsert.length; i += CHUNK_SIZE) {
+    const chunk = recordsToInsert.slice(i, i + CHUNK_SIZE);
+
+    const { error: insertError } = await supabase
       .from('soh')
-      .select('*')
-      .order('product_id', { ascending: true });
+      .insert(chunk);
 
-    if (error) {
-      logger.error('Supabase error fetching SOH', { error });
-      throw createError('Failed to fetch SOH records from database', 500);
-    }
-    
-    logger.info(`Successfully fetched ${data?.length || 0} SOH records`);
-    
-    res.status(200).json({
-      success: true,
-      data,
-      count: data?.length || 0
-    });
-  } catch (error: any) {
-    logger.error('Error in getAllSoh', { error: error.message });
-    res.status(error.statusCode || 500).json({ 
-      success: false,
-      message: error.message || "Failed to fetch SOH records"
-    });
-  }
-};
-
-// BLOCK 3: Analyze Excel Headers Controller
-export const analyzeExcelHeaders = async (req: Request, res: Response) => {
-  try {
-    if (!req.file) {
-      throw createError('No file uploaded', 400);
-    }
-
-    logger.info('Analyzing Excel file headers', { filename: req.file.originalname });
-
-    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
-    const sheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
-    
-    // Get the range and extract headers from first row
-    const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
-    const headers: string[] = [];
-    
-    for (let col = range.s.c; col <= range.e.c; col++) {
-      const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
-      const cell = worksheet[cellAddress];
-      if (cell && cell.v) {
-        headers.push(String(cell.v).trim());
-      }
-    }
-
-    // Get sample data from first few rows
-    const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
-      header: 1,
-      range: 0,
-      defval: null
-    });
-
-    const sampleData = jsonData.slice(1, 6); // Get first 5 data rows
-
-    logger.info(`Excel analysis complete: ${headers.length} headers found`);
-
-    res.status(200).json({
-      success: true,
-      data: {
-        headers,
-        sampleData,
-        totalRows: jsonData.length - 1, // Exclude header row
-        filename: req.file.originalname
-      }
-    });
-
-  } catch (error: any) {
-    logger.error('Error analyzing Excel headers', { error: error.message });
-    res.status(error.statusCode || 500).json({
-      success: false,
-      message: error.message || 'Failed to analyze Excel file'
-    });
-  }
-};
-
-// BLOCK 4: Import SOH Data Controller (Simplified)
-export const importSohData = async (req: Request, res: Response) => {
-  try {
-    const { selectedColumns, replaceExisting = false } = req.body;
-    
-    if (!req.file) {
-      throw createError('No file uploaded', 400);
-    }
-
-    if (!selectedColumns || !Array.isArray(selectedColumns) || selectedColumns.length === 0) {
-      throw createError('No columns selected for import', 400);
-    }
-
-    logger.info('Starting SOH import', { 
-      filename: req.file.originalname,
-      selectedColumns,
-      replaceExisting 
-    });
-
-    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
-    const sheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
-    
-    const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
-      header: 1,
-      defval: null
-    });
-
-    if (jsonData.length < 2) {
-      throw createError('Excel file must contain at least a header row and one data row', 400);
-    }
-
-    const headers = jsonData[0] as string[];
-    const dataRows = jsonData.slice(1);
-
-    logger.info('Excel data parsed', {
-      totalHeaders: headers.length,
-      totalDataRows: dataRows.length,
-      excelHeaders: headers
-    });
-
-    // Map selected columns to their indices
-    const columnMapping: { [key: string]: number } = {};
-    selectedColumns.forEach((colName: string) => {
-      const index = headers.findIndex(h => h === colName);
-      if (index !== -1) {
-        columnMapping[colName] = index;
-      }
-    });
-
-    logger.info('Column mapping created', { columnMapping });
-
-    // Clean column names for database (remove spaces, special chars)
-    const cleanColumnNames: { [key: string]: string } = {};
-    selectedColumns.forEach((colName: string) => {
-      cleanColumnNames[colName] = colName
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, '_')
-        .replace(/_+/g, '_')
-        .replace(/^_|_$/g, '');
-    });
-
-    logger.info('Clean column names generated', { cleanColumnNames });
-
-    // Predefined columns that should exist
-    const predefinedColumns = [
-      'product_id', 'description', 'stock_on_hand', 
-      'default_uom', 'locations', 'ean', 'weight_kg', 'volume_m3'
-    ];
-
-    // Check if all selected columns are supported
-    const unsupportedColumns = Object.values(cleanColumnNames).filter(
-      cleanCol => !predefinedColumns.includes(cleanCol)
-    );
-
-    if (unsupportedColumns.length > 0) {
-      logger.warn('Unsupported columns detected', { unsupportedColumns });
-      throw createError(
-        `Unsupported columns: ${unsupportedColumns.join(', ')}. Supported columns are: ${predefinedColumns.join(', ')}`,
-        400
-      );
-    }
-
-    logger.info('All columns are supported', { 
-      selectedColumns: Object.values(cleanColumnNames),
-      supportedColumns: predefinedColumns
-    });
-
-    // Clear existing data if replace mode
-    if (replaceExisting) {
-      const { error: deleteError } = await supabase
-        .from('soh')
-        .delete()
-        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
-
-      if (deleteError) {
-        logger.warn('Could not clear existing data', { error: deleteError });
-      } else {
-        logger.info('Existing data cleared successfully');
-      }
-    }
-
-    // Import data
-    const batchId = crypto.randomUUID();
-    let successCount = 0;
-    let errorCount = 0;
-    const errors: string[] = [];
-
-    logger.info('Starting data insertion', { batchId, totalRows: dataRows.length });
-
-    // Process in batches
-    const batchSize = 100;
-    for (let i = 0; i < dataRows.length; i += batchSize) {
-      const batch = dataRows.slice(i, i + batchSize);
-      const insertData: any[] = [];
-
-      batch.forEach((row, index) => {
-        try {
-          const record: any = {
-            import_batch_id: batchId,
-            import_source: req.file!.originalname
-          };
-
-          // Map selected columns to clean column names
-          selectedColumns.forEach((originalCol: string) => {
-            const cleanCol = cleanColumnNames[originalCol];
-            const colIndex = columnMapping[originalCol];
-            let value = (row as any[])[colIndex]; // <-- Fix: cast row to any[]
-
-            // Handle empty/null values
-            if (value === null || value === undefined || value === '') {
-              // Set default values based on column type
-              if (cleanCol.includes('stock') || cleanCol.includes('weight') || cleanCol.includes('volume')) {
-                value = 0;
-              } else {
-                value = null;
-              }
-            }
-
-            // Convert to appropriate type
-            if (cleanCol.includes('stock') || cleanCol.includes('weight') || cleanCol.includes('volume')) {
-              value = value === null ? 0 : Number(value) || 0;
-            } else {
-              value = value === null ? null : String(value);
-            }
-
-            // Special handling for product_id
-            if (cleanCol === 'product_id' || originalCol.toLowerCase().includes('product')) {
-              record.product_id = String(value || '');
-            }
-
-            record[cleanCol] = value;
-          });
-
-          insertData.push(record);
-          
-          // Log first record of first batch for debugging
-          if (i === 0 && index === 0) {
-            logger.info('Sample record', { 
-              sampleRecord: record,
-              recordKeys: Object.keys(record)
-            });
-          }
-        } catch (error) {
-          errorCount++;
-          errors.push(`Row ${i + index + 2}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
+    if (insertError) {
+      logger.error('Error inserting SOH chunk', {
+        chunkIndex: Math.floor(i / CHUNK_SIZE),
+        error: insertError.message
       });
+      throw createError(`Failed to insert SOH data: ${insertError.message}`, 500);
+    }
 
-      // Insert batch
-      if (insertData.length > 0) {
-        logger.info(`Inserting batch ${Math.floor(i / batchSize) + 1}`, { 
-          batchSize: insertData.length,
-          startRow: i + 2
-        });
+    insertedCount += chunk.length;
+  }
 
-        const { error: insertError } = await supabase
-          .from('soh')
-          .insert(insertData);
+  const duration = Date.now() - startTime;
+  logger.info('SOH import complete', {
+    insertedRecords: insertedCount,
+    skippedRecords: skippedCount,
+    archivedRecords: archivedCount,
+    durationMs: duration
+  });
 
-        if (insertError) {
-          logger.error('Batch insert error', { 
-            error: insertError, 
-            batchStart: i,
-            batchNumber: Math.floor(i / batchSize) + 1
-          });
-          errorCount += insertData.length;
-          errors.push(`Batch ${Math.floor(i / batchSize) + 1}: ${insertError.message}`);
-        } else {
-          successCount += insertData.length;
-          logger.info(`Batch ${Math.floor(i / batchSize) + 1} inserted successfully`);
-        }
+  return {
+    success: true,
+    message: `Imported ${insertedCount} SOH records. Archived ${archivedCount} previous records.`,
+    imported: insertedCount,
+    skipped: skippedCount,
+    archived: archivedCount
+  };
+};
+
+// ============== BLOCK 5: Upload Controller ==============
+export const uploadSoh = asyncHandler(async (req: Request, res: Response) => {
+  logger.info('SOH upload request received', {
+    hasFile: !!req.file,
+    filename: req.file?.originalname
+  });
+
+  if (!req.file) {
+    throw createError('No file uploaded.', 400);
+  }
+
+  // Parse Excel file
+  const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+  const sheetName = workbook.SheetNames[0];
+  const worksheet = workbook.Sheets[sheetName];
+
+  // Convert to JSON (array of arrays)
+  const rawData: any[][] = XLSX.utils.sheet_to_json(worksheet, {
+    header: 1,
+    raw: true,
+    defval: null
+  });
+
+  if (rawData.length < 2) {
+    throw createError('Excel file must contain at least a header row and one data row.', 400);
+  }
+
+  // Extract headers and data
+  const headers = rawData[0].map((h: any) => String(h || '').trim());
+  const dataRows = rawData.slice(1).filter(row =>
+    row.some(cell => cell !== null && cell !== '')
+  );
+
+  logger.info('Excel file parsed', {
+    filename: req.file.originalname,
+    headers: headers,
+    totalRows: dataRows.length
+  });
+
+  // Auto-detect column mapping
+  const mapping = autoDetectColumns(headers);
+
+  // Generate batch ID
+  const importBatchId = crypto.randomUUID();
+
+  // Process and import data
+  const result = await processSohData(
+    dataRows,
+    headers,
+    mapping,
+    importBatchId,
+    req.file.originalname
+  );
+
+  return res.status(201).json({
+    success: true,
+    message: result.message,
+    data: {
+      imported: result.imported,
+      skipped: result.skipped,
+      archived: result.archived,
+      import_batch_id: importBatchId,
+      detected_columns: {
+        product_id: mapping.productId !== null ? headers[mapping.productId] : null,
+        description: mapping.description !== null ? headers[mapping.description] : null,
+        stock_on_hand: mapping.stockOnHand !== null ? headers[mapping.stockOnHand] : null
       }
     }
+  });
+});
 
-    logger.info(`SOH import completed`, { 
-      successCount, 
-      errorCount, 
-      batchId,
-      filename: req.file.originalname 
-    });
+// ============== BLOCK 6: Get SOH Controller ==============
+export const getSoh = asyncHandler(async (req: Request, res: Response) => {
+  const { search, include_inactive } = req.query;
+  const includeInactive = include_inactive === 'true';
 
-    res.status(200).json({
-      success: true,
-      data: {
-        successCount,
-        errorCount,
-        totalRows: dataRows.length,
-        batchId,
-        errors: errors.slice(0, 10),
-        columnsImported: Object.keys(cleanColumnNames)
-      },
-      message: `Import completed: ${successCount} records imported, ${errorCount} errors. Imported columns: ${Object.keys(cleanColumnNames).join(', ')}`
-    });
+  logger.info('Fetching SOH records', { search, include_inactive: includeInactive });
 
-  } catch (error: any) {
-    logger.error('Error in importSohData', { error: error.message });
-    res.status(error.statusCode || 500).json({
-      success: false,
-      message: error.message || 'Failed to import SOH data'
-    });
+  let query = supabase
+    .from('soh')
+    .select('id, product_id, description, stock_on_hand, import_batch_id, import_source, created_at, is_active')
+    .order('product_id', { ascending: true });
+
+  // Filter by active status
+  if (!includeInactive) {
+    query = query.eq('is_active', true);
   }
-};
-// BLOCK 5: Delete All SOH Data Controller
-export const deleteAllSoh = async (req: Request, res: Response) => {
-  try {
-    logger.info('Deleting all SOH data');
 
-    const { error } = await supabase
-      .from('soh')
-      .delete()
-      .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all records
-
-    if (error) {
-      logger.error('Error deleting SOH data', { error });
-      throw createError('Failed to delete SOH data', 500);
-    }
-
-    logger.info('All SOH data deleted successfully');
-
-    res.status(200).json({
-      success: true,
-      message: 'All SOH data deleted successfully'
-    });
-  } catch (error: any) {
-    logger.error('Error in deleteAllSoh', { error: error.message });
-    res.status(error.statusCode || 500).json({
-      success: false,
-      message: error.message || 'Failed to delete SOH data'
-    });
+  // Search filter
+  if (search && typeof search === 'string' && search.trim()) {
+    query = query.or(`product_id.ilike.%${search.trim()}%,description.ilike.%${search.trim()}%`);
   }
-};
 
-export const getSohSummary = async (req: Request, res: Response) => {
-  try {
-    logger.info('Fetching SOH summary');
+  const { data, error } = await query;
 
-    const { count, error } = await supabase
-      .from('soh')
-      .select('*', { count: 'exact', head: true });
-
-    if (error) {
-      throw createError('Failed to get SOH count', 500);
-    }
-
-    // Get latest import info
-    const { data: latestImport, error: importError } = await supabase
-      .from('soh')
-      .select('import_batch_id, import_source, created_at')
-      .order('created_at', { ascending: false })
-      .limit(1);
-
-    res.status(200).json({
-      success: true,
-      data: {
-        totalRecords: count || 0,
-        latestImport: latestImport?.[0] || null
-      }
-    });
-
-  } catch (error: any) {
-    logger.error('Error in getSohSummary', { error: error.message });
-    res.status(error.statusCode || 500).json({
-      success: false,
-      message: error.message || 'Failed to get SOH summary'
-    });
+  if (error) {
+    logger.error('Supabase error fetching SOH', { error });
+    throw createError('Failed to fetch SOH records', 500);
   }
-};
+
+  // Calculate summary
+  const totalRecords = data?.length || 0;
+  const totalStock = data?.reduce((sum, item) => sum + (item.stock_on_hand || 0), 0) || 0;
+  const zeroStockCount = data?.filter(item => item.stock_on_hand === 0).length || 0;
+
+  logger.info('Successfully fetched SOH records', { count: totalRecords });
+
+  return res.status(200).json({
+    success: true,
+    summary: {
+      totalRecords,
+      totalStock,
+      zeroStockCount
+    },
+    data: data || []
+  });
+});
+
+// ============== BLOCK 7: Export ==============
+export { uploadSoh, getSoh };
