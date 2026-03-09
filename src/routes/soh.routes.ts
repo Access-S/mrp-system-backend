@@ -1,87 +1,57 @@
-//src/routes/soh.routes.ts
+// src/routes/soh.routes.ts
 
-
-// BLOCK 1: Imports and Dependencies
-import { Router } from 'express';
+// ============== BLOCK 1: Imports ==============
+import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import Joi from 'joi';
-import { 
-  getAllSoh, 
-  analyzeExcelHeaders, 
-  importSohData, 
-  getSohSummary,
-  deleteAllSoh
-} from '../controllers/soh.controller';
-import { validateRequest, validateQuery } from '../middleware/validation';
+import { getSoh, uploadSoh } from '../controllers/soh.controller';
+import { validateQuery } from '../middleware/validation';
 import { asyncHandler } from '../utils/asyncHandler';
+import { createError } from '../middleware/errorHandler';
 
-// BLOCK 2: Multer Configuration for File Upload
+// ============== BLOCK 2: Multer Configuration ==============
 const storage = multer.memoryStorage();
-const upload = multer({
-  storage,
-  limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
-  },
-  fileFilter: (req, file, cb) => {
-    // Accept Excel files only
-    const allowedMimes = [
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
-      'application/vnd.ms-excel', // .xls
-      'text/csv' // .csv
-    ];
-    
-    if (allowedMimes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only Excel (.xlsx, .xls) and CSV files are allowed'));
-    }
-  }
-});
+const upload = multer({ storage: storage });
 
-// BLOCK 3: Validation Schemas
-const querySchema = Joi.object({
-  page: Joi.number().integer().min(1).optional(),
-  limit: Joi.number().integer().min(1).max(1000).optional(),
+// ============== BLOCK 3: Validation Schemas ==============
+const sohQuerySchema = Joi.object({
   search: Joi.string().allow('').optional(),
-  product_id: Joi.string().allow('').optional()
+  include_inactive: Joi.string().valid('true', 'false').optional()
 });
 
-const importSchema = Joi.object({
-  selectedColumns: Joi.array().items(Joi.string()).min(1).required(),
-  replaceExisting: Joi.boolean().optional().default(false)
-});
+// ============== BLOCK 4: File Validation Middleware ==============
+const validateExcelFile = (req: Request, res: Response, next: NextFunction) => {
+  if (!req.file) {
+    return next(createError('No file uploaded. Please select an Excel file.', 400));
+  }
+  
+  const fileExt = req.file.originalname.split('.').pop()?.toLowerCase();
+  if (!['xlsx', 'xls', 'csv'].includes(fileExt || '')) {
+    return next(createError('Only Excel files (.xlsx, .xls) or CSV are allowed.', 400));
+  }
+  
+  if (req.file.size > 10 * 1024 * 1024) {
+    return next(createError('File size must be less than 10MB.', 400));
+  }
+  
+  next();
+};
 
-// BLOCK 4: Router Definition and Routes
+// ============== BLOCK 5: Router Definition ==============
 const router = Router();
 
-// Get all SOH records with optional filtering
-router.get('/', 
-  validateQuery(querySchema), 
-  asyncHandler(getAllSoh)
+// GET /api/soh - Fetch all active SOH records
+router.get('/',
+  validateQuery(sohQuerySchema),
+  asyncHandler(getSoh)
 );
 
-// Get SOH summary statistics
-router.get('/summary', 
-  asyncHandler(getSohSummary)
+// POST /api/soh/upload - Import SOH data from Excel
+router.post('/upload',
+  upload.single('sohFile'),
+  validateExcelFile,
+  asyncHandler(uploadSoh)
 );
 
-// Analyze Excel file headers (step 1 of import process)
-router.post('/analyze', 
-  upload.single('file'),
-  asyncHandler(analyzeExcelHeaders)
-);
-
-// Import SOH data from Excel (step 2 of import process)
-router.post('/import', 
-  upload.single('file'),
-  validateRequest(importSchema),
-  asyncHandler(importSohData)
-);
-
-// Delete all SOH data
-router.delete('/', 
-  asyncHandler(deleteAllSoh)
-);
-
-// BLOCK 5: Export Router
+// ============== BLOCK 6: Export ==============
 export default router;
