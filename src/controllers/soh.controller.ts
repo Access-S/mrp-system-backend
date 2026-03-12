@@ -10,13 +10,13 @@ import * as XLSX from 'xlsx';
 
 // ============== BLOCK 2: Types & Interfaces ==============
 interface ColumnMapping {
-  productId: number | null;
+  partCode: number | null;
   description: number | null;
   stockOnHand: number | null;
 }
 
 interface SohRecord {
-  product_id: string;
+  part_code: string;
   description: string;
   stock_on_hand: number;
   import_batch_id: string;
@@ -27,7 +27,7 @@ interface SohRecord {
 // ============== BLOCK 3: Auto-Detect Column Mapping ==============
 const autoDetectColumns = (headers: string[]): ColumnMapping => {
   const mapping: ColumnMapping = {
-    productId: null,
+    partCode: null,
     description: null,
     stockOnHand: null
   };
@@ -35,7 +35,7 @@ const autoDetectColumns = (headers: string[]): ColumnMapping => {
   headers.forEach((header, index) => {
     const normalizedHeader = header.toLowerCase().trim();
 
-    // Product ID detection
+    // Part Code detection
     if (
       normalizedHeader.includes('product') ||
       normalizedHeader.includes('sku') ||
@@ -43,8 +43,8 @@ const autoDetectColumns = (headers: string[]): ColumnMapping => {
       normalizedHeader === 'id' ||
       normalizedHeader === 'code'
     ) {
-      if (mapping.productId === null) {
-        mapping.productId = index;
+      if (mapping.partCode === null) {
+        mapping.partCode = index;
       }
     }
 
@@ -96,8 +96,8 @@ const processSohData = async (
   logger.info('Processing SOH data', { recordCount: jsonData.length, importBatchId });
 
   // Validate required columns detected
-  if (mapping.productId === null) {
-    throw createError('Could not detect Product ID column. Expected headers containing: product, sku, item, id, code', 400);
+  if (mapping.partCode === null) {
+    throw createError('Could not detect Part Code column. Expected headers containing: product, sku, item, id, code', 400);
   }
 
   if (mapping.stockOnHand === null) {
@@ -105,7 +105,7 @@ const processSohData = async (
   }
 
   logger.info('Column mapping detected', {
-    productId: headers[mapping.productId],
+    partCode: headers[mapping.partCode],
     description: mapping.description !== null ? headers[mapping.description] : 'Not found',
     stockOnHand: headers[mapping.stockOnHand!]
   });
@@ -134,11 +134,11 @@ const processSohData = async (
   for (let i = 0; i < jsonData.length; i++) {
     const row = jsonData[i];
 
-    // Get product ID
-    const productId = row[mapping.productId!]?.toString().trim();
+    // Get part code
+    const partCode = row[mapping.partCode!]?.toString().trim();
 
     // Skip empty rows
-    if (!productId || productId === '') {
+    if (!partCode || partCode === '') {
       skippedCount++;
       continue;
     }
@@ -153,7 +153,7 @@ const processSohData = async (
     const stockOnHand = parseFloat(stockValue) || 0;
 
     recordsToInsert.push({
-      product_id: productId,
+      part_code: partCode,
       description: description,
       stock_on_hand: stockOnHand,
       import_batch_id: importBatchId,
@@ -269,7 +269,7 @@ export const uploadSoh = asyncHandler(async (req: Request, res: Response) => {
       archived: result.archived,
       import_batch_id: importBatchId,
       detected_columns: {
-        product_id: mapping.productId !== null ? headers[mapping.productId] : null,
+        part_code: mapping.partCode !== null ? headers[mapping.partCode] : null,
         description: mapping.description !== null ? headers[mapping.description] : null,
         stock_on_hand: mapping.stockOnHand !== null ? headers[mapping.stockOnHand] : null
       }
@@ -286,8 +286,8 @@ export const getSoh = asyncHandler(async (req: Request, res: Response) => {
 
   let query = supabase
     .from('soh')
-    .select('id, product_id, description, stock_on_hand, import_batch_id, import_source, created_at, is_active')
-    .order('product_id', { ascending: true });
+    .select('id, part_code, description, stock_on_hand, import_batch_id, import_source, created_at, is_active')
+    .order('part_code', { ascending: true });
 
   // Filter by active status
   if (!includeInactive) {
@@ -296,7 +296,7 @@ export const getSoh = asyncHandler(async (req: Request, res: Response) => {
 
   // Search filter
   if (search && typeof search === 'string' && search.trim()) {
-    query = query.or(`product_id.ilike.%${search.trim()}%,description.ilike.%${search.trim()}%`);
+    query = query.or(`part_code.ilike.%${search.trim()}%,description.ilike.%${search.trim()}%`);
   }
 
   const { data: sohData, error } = await query;
@@ -307,25 +307,25 @@ export const getSoh = asyncHandler(async (req: Request, res: Response) => {
   }
 
   // Fetch parts data for stock value calculation
-  const productIds = sohData?.map(item => item.product_id).filter(id => id) || [];
+  const partCodes = sohData?.map(item => item.part_code).filter(code => code) || [];
   let partsMap = new Map<string, { unit_cost: number }>();
 
-  if (productIds.length > 0) {
+  if (partCodes.length > 0) {
     const { data: partsData } = await supabase
       .from('parts')
-      .select('product_id, unit_cost')
-      .in('product_id', productIds);
+      .select('part_code, unit_cost')
+      .in('part_code', partCodes);
 
     if (partsData) {
       partsData.forEach(part => {
-        partsMap.set(part.product_id, { unit_cost: part.unit_cost || 0 });
+        partsMap.set(part.part_code, { unit_cost: part.unit_cost || 0 });
       });
     }
   }
 
   // Add stock_value to each record
   const enrichedRecords = sohData?.map(record => {
-    const part = partsMap.get(record.product_id);
+    const part = partsMap.get(record.part_code);
     const unitCost = part?.unit_cost || 0;
     const stockValue = record.stock_on_hand * unitCost;
 
