@@ -5,6 +5,72 @@ import { supabase } from '../config/supabase';
 import logger from '../utils/logger';
 import { createError } from '../middleware/errorHandler';
 
+// ============== BLOCK 1.5: Transformation Helper ==============
+
+/**
+ * Transforms raw Supabase PO data to camelCase format for frontend consumption.
+ * Handles nested product and flattens statuses from [{status: "Open"}] to ["Open"].
+ */
+const formatPurchaseOrder = (po: any): any => {
+  if (!po) return null;
+
+  // Format nested product if present
+  let formattedProduct = null;
+  if (po.product) {
+    const product = po.product;
+    formattedProduct = {
+      id: product.id,
+      productCode: product.product_code,
+      description: product.description,
+      unitsPerShipper: product.units_per_shipper || 0,
+      dailyRunRate: product.daily_run_rate || 0,
+      hourlyRunRate: product.hourly_run_rate || 0,
+      minsPerShipper: product.mins_per_shipper || 0,
+      pricePerShipper: product.price_per_shipper || 0,
+      createdAt: product.created_at,
+      updatedAt: product.updated_at,
+      components: (product.bom_components || []).map((bom: any) => ({
+        partCode: bom.part_code,
+        partDescription: bom.part_description,
+        partType: bom.part_type,
+        perShipper: bom.per_shipper || 0
+      }))
+    };
+  }
+
+  // Flatten statuses: [{status: "Open"}] → ["Open"]
+  let flatStatuses: string[] = [];
+  if (Array.isArray(po.statuses)) {
+    flatStatuses = po.statuses.map((s: any) =>
+      typeof s === 'string' ? s : s.status
+    );
+  }
+
+  return {
+    id: po.id,
+    poNumber: po.po_number,
+    sequence: po.sequence,
+    description: po.description,
+    customerName: po.customer_name,
+    poCreatedDate: po.po_created_date,
+    poReceivedDate: po.po_received_date,
+    requestedDeliveryDate: po.requested_delivery_date,
+    orderedQtyPieces: po.ordered_qty_pieces,
+    orderedQtyShippers: po.ordered_qty_shippers,
+    customerAmount: po.customer_amount,
+    systemAmount: po.system_amount,
+    currentStatus: po.current_status || 'Open',
+    statuses: flatStatuses,
+    deliveryDate: po.delivery_date,
+    deliveryDocketNumber: po.delivery_docket_number,
+    hourlyRunRate: po.hourly_run_rate,
+    minsPerShipper: po.mins_per_shipper,
+    createdAt: po.created_at,
+    updatedAt: po.updated_at,
+    product: formattedProduct,
+  };
+};
+
 export const getPurchaseOrders = async (req: Request, res: Response) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
@@ -46,7 +112,7 @@ export const getPurchaseOrders = async (req: Request, res: Response) => {
 
     res.status(200).json({
       success: true,
-      data,
+      data: (data || []).map(formatPurchaseOrder),
       pagination: {
         total: count,
         page,
@@ -98,7 +164,7 @@ export const getPurchaseOrderById = async (req: Request, res: Response) => {
 
     res.status(200).json({
       success: true,
-      data
+      data: formatPurchaseOrder(data)
     });
   } catch (error: any) {
     logger.error('Error in getPurchaseOrderById', { error: error.message, poId: req.params.poId });
@@ -149,7 +215,7 @@ export const createPurchaseOrder = async (req: Request, res: Response) => {
 
     res.status(201).json({
       success: true,
-      data: newPo,
+      data: formatPurchaseOrder(newPo),
       message: 'Purchase order created successfully'
     });
 
@@ -203,7 +269,7 @@ export const updatePurchaseOrder = async (req: Request, res: Response) => {
 
     res.status(200).json({
       success: true,
-      data: updatedPo,
+      data: formatPurchaseOrder(updatedPo),
       message: 'Purchase order updated successfully'
     });
 
