@@ -110,6 +110,97 @@ export const getAllProducts = async (req: Request, res: Response) => {
 };
 
 // ============================================================================
+// BLOCK 2.5: Get Single Product by Product Code
+// ============================================================================
+/**
+ * Fetches a single product by product code, enriched with BOM components.
+ * Returns data in camelCase format for frontend consumption.
+ */
+export const getProductByCode = async (req: Request, res: Response) => {
+  try {
+    const { productCode } = req.params;
+
+    logger.info('Fetching product by code', { productCode });
+
+    // STEP 1: Fetch product from database
+    const { data: product, error: productError } = await supabase
+      .from('products')
+      .select(`
+        id,
+        product_code,
+        description,
+        units_per_shipper,
+        daily_run_rate,
+        hourly_run_rate,
+        mins_per_shipper,
+        price_per_shipper,
+        created_at,
+        updated_at
+      `)
+      .eq('product_code', productCode)
+      .single();
+
+    if (productError) {
+      if (productError.code === 'PGRST116') {
+        logger.warn('Product not found', { productCode });
+        throw createError(`Product with code ${productCode} not found`, 404);
+      }
+      logger.error('Supabase error fetching product', { error: productError });
+      throw createError('Failed to fetch product from database', 500);
+    }
+
+    // STEP 2: Fetch BOM components for this product
+    const { data: bomComponents, error: bomError } = await supabase
+      .from('bom_components')
+      .select(`
+        part_code,
+        part_description,
+        part_type,
+        per_shipper
+      `)
+      .eq('product_id', product.id);
+
+    if (bomError) {
+      logger.warn('Error fetching BOM components (continuing without BOM)', { error: bomError });
+    }
+
+    // STEP 3: Build camelCase response
+    const formattedProduct = {
+      id: product.id,
+      productCode: product.product_code,
+      description: product.description,
+      unitsPerShipper: product.units_per_shipper || 0,
+      dailyRunRate: product.daily_run_rate || 0,
+      hourlyRunRate: product.hourly_run_rate || 0,
+      minsPerShipper: product.mins_per_shipper || 0,
+      pricePerShipper: product.price_per_shipper || 0,
+      createdAt: product.created_at,
+      updatedAt: product.updated_at,
+      components: (bomComponents || []).map(bom => ({
+        partCode: bom.part_code,
+        partDescription: bom.part_description,
+        partType: bom.part_type,
+        perShipper: bom.per_shipper || 0
+      }))
+    };
+
+    logger.info('Successfully fetched product', { productCode, componentCount: formattedProduct.components.length });
+
+    res.status(200).json({
+      success: true,
+      data: formattedProduct
+    });
+
+  } catch (error: any) {
+    logger.error('Error in getProductByCode', { error: error.message, productCode: req.params.productCode });
+    res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message || 'Failed to fetch product'
+    });
+  }
+};
+
+// ============================================================================
 // BLOCK 3: Get BOM for a Single Product
 // ============================================================================
 /**
