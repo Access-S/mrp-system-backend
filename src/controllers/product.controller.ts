@@ -57,6 +57,23 @@ export const getAllProducts = async (req: Request, res: Response) => {
       logger.warn('Supabase error fetching BOM components (continuing without BOM)', { error: bomError });
     }
 
+    // STEP 2.5: Fetch all parts costs in a single query
+    const allPartCodes = (allBom || []).map(bom => bom.part_code).filter(Boolean);
+    let partsMap = new Map<string, number>();
+
+    if (allPartCodes.length > 0) {
+      const { data: partsData } = await supabase
+        .from('parts')
+        .select('part_code, unit_cost')
+        .in('part_code', allPartCodes);
+
+      if (partsData) {
+        partsData.forEach(part => {
+          partsMap.set(part.part_code, part.unit_cost || 0);
+        });
+      }
+    }
+
     // STEP 3: Build product map and convert to camelCase
     const productMap = new Map<string, any>();
     
@@ -84,7 +101,8 @@ export const getAllProducts = async (req: Request, res: Response) => {
           partCode: bomItem.part_code,
           partDescription: bomItem.part_description,
           partType: bomItem.part_type,
-          perShipper: bomItem.per_shipper || 0
+          perShipper: bomItem.per_shipper || 0,
+          unitCost: partsMap.get(bomItem.part_code) || 0
         });
       }
     });
@@ -164,6 +182,23 @@ export const getProductByCode = async (req: Request, res: Response) => {
       logger.warn('Error fetching BOM components (continuing without BOM)', { error: bomError });
     }
 
+    // STEP 2.5: Fetch unit costs from parts table
+    const partCodes = (bomComponents || []).map(bom => bom.part_code).filter(Boolean);
+    let partsMap = new Map<string, number>();
+
+    if (partCodes.length > 0) {
+      const { data: partsData } = await supabase
+        .from('parts')
+        .select('part_code, unit_cost')
+        .in('part_code', partCodes);
+
+      if (partsData) {
+        partsData.forEach(part => {
+          partsMap.set(part.part_code, part.unit_cost || 0);
+        });
+      }
+    }
+
     // STEP 3: Build camelCase response
     const formattedProduct = {
       id: product.id,
@@ -180,7 +215,8 @@ export const getProductByCode = async (req: Request, res: Response) => {
         partCode: bom.part_code,
         partDescription: bom.part_description,
         partType: bom.part_type,
-        perShipper: bom.per_shipper || 0
+        perShipper: bom.per_shipper || 0,
+        unitCost: partsMap.get(bom.part_code) || 0
       }))
     };
 
@@ -205,6 +241,7 @@ export const getProductByCode = async (req: Request, res: Response) => {
 // ============================================================================
 /**
  * Fetches BOM components for a specific product by product code.
+ * Enriches each component with unit cost from the parts table.
  * Returns data in camelCase format for frontend consumption.
  */
 export const getBomForProduct = async (req: Request, res: Response) => {
@@ -236,17 +273,37 @@ export const getBomForProduct = async (req: Request, res: Response) => {
       throw createError('Failed to fetch BOM components from database', 500);
     }
 
-    // STEP 3: Convert to camelCase format
+    // STEP 3: Fetch unit costs from parts table
+    const partCodes = (bomComponents || []).map(bom => bom.part_code).filter(Boolean);
+    let partsMap = new Map<string, number>();
+
+    if (partCodes.length > 0) {
+      const { data: partsData, error: partsError } = await supabase
+        .from('parts')
+        .select('part_code, unit_cost')
+        .in('part_code', partCodes);
+
+      if (partsError) {
+        logger.warn('Error fetching parts costs (continuing without costs)', { error: partsError });
+      } else if (partsData) {
+        partsData.forEach(part => {
+          partsMap.set(part.part_code, part.unit_cost || 0);
+        });
+      }
+    }
+
+    // STEP 4: Convert to camelCase format with cost
     const formattedBom = (bomComponents || []).map(bom => ({
       partCode: bom.part_code,
       partDescription: bom.part_description,
       partType: bom.part_type,
-      perShipper: bom.per_shipper || 0
+      perShipper: bom.per_shipper || 0,
+      unitCost: partsMap.get(bom.part_code) || 0
     }));
     
     logger.info(`Successfully fetched ${formattedBom.length} BOM components for product ${productCode}`);
     
-    // STEP 4: Return formatted data
+    // STEP 5: Return formatted data
     res.status(200).json({
       success: true,
       data: formattedBom,
