@@ -3,7 +3,7 @@
 |          BACKEND PROJECT STRUCTURE                       |
 |          mrp-system-backend                              |
 |                                                          |
-|          Generated: 2026-03-14 06:19:29                  |
+|          Generated: 2026-03-14 06:21:45                  |
 |                                                          |
 +----------------------------------------------------------+
 
@@ -11,10 +11,12 @@
   |
   ├── database/
   │   ├── migrations/
-  │   │   └── [SQL]    001_create_soh_table.sql
+  │   │   ├── [SQL]    001_create_soh_table.sql
+  │   │   └── [SQL]    20260306_add_forecast_history.sql
   │   └── schema/
   │       ├── [SQL]    Complete MRP Schema.sql
   │       ├── [SQL]    functions.sql
+  │       ├── [SQL]    kpi_snapshots.sql
   │       └── [SQL]    tables.sql
   ├── src/
   │   ├── config/
@@ -26,6 +28,7 @@
   │   │   ├── [TS]     import.controller.ts
   │   │   ├── [TS]     product.controller.ts
   │   │   ├── [TS]     purchaseOrder.controller.ts
+  │   │   ├── [TS]     snapshot.controller.ts
   │   │   └── [TS]     soh.controller.ts
   │   ├── middleware/
   │   │   ├── [TS]     errorHandler.ts
@@ -38,11 +41,13 @@
   │   │   ├── [TS]     import.routes.ts
   │   │   ├── [TS]     product.routes.ts
   │   │   ├── [TS]     purchaseOrder.routes.ts
+  │   │   ├── [TS]     snapshot.routes.ts
   │   │   └── [TS]     soh.routes.ts
   │   ├── utils/
   │   │   ├── [TS]     asyncHandler.ts
   │   │   └── [TS]     logger.ts
   │   └── [TS]     server.ts
+  ├── [MD]     Architecture_Blueprint.md
   ├── [ENV]    .env
   ├── [GIT]    .gitignore
   ├── [JSON]   package.json
@@ -53,5 +58,5 @@
   └── [SH]     update-structure.sh
 
 +----------------------------------------------------------+
-|  SUMMARY:  Folders: 9    | Files: 33   | Total: 42       |
+|  SUMMARY:  Folders: 9    | Files: 38   | Total: 47       |
 +----------------------------------------------------------+
