@@ -3,7 +3,7 @@
 |          BACKEND PROJECT STRUCTURE                       |
 |          mrp-system-backend                              |
 |                                                          |
-|          Generated: 2026-03-14 06:16:48                  |
+|          Generated: 2026-03-14 06:19:29                  |
 |                                                          |
 +----------------------------------------------------------+
 
@@ -34,6 +34,7 @@
   │   │   ├── [TS]     bom.routes.ts
   │   │   ├── [TS]     dashboard.routes.ts
   │   │   ├── [TS]     forecast.routes.ts
+  │   │   ├── [TS]     health.routes.ts
   │   │   ├── [TS]     import.routes.ts
   │   │   ├── [TS]     product.routes.ts
   │   │   ├── [TS]     purchaseOrder.routes.ts
@@ -44,7 +45,6 @@
   │   └── [TS]     server.ts
   ├── [ENV]    .env
   ├── [GIT]    .gitignore
-  ├── [TS]     health.routes.ts
   ├── [JSON]   package.json
   ├── [JSON]   package-lock.json
   ├── [TXT]    project-structure.txt
