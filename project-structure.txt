@@ -3,21 +3,27 @@
 |          BACKEND PROJECT STRUCTURE                       |
 |          mrp-system-backend                              |
 |                                                          |
-|          Generated: 2026-03-14 06:21:45                  |
+|          Generated: 2026-03-14 06:42:49                  |
 |                                                          |
 +----------------------------------------------------------+
 
   mrp-system-backend/
   |
   ├── database/
+  │   ├── changelog/
+  │   │   └── [MD]     CHANGELOG.md
+  │   ├── current-schema/
+  │   │   ├── [SQL]    functions.sql
+  │   │   ├── [SQL]    policies.sql
+  │   │   └── [SQL]    tables.sql
+  │   ├── diagrams/
+  │   │   └── [MD]     er-diagram.md
   │   ├── migrations/
   │   │   ├── [SQL]    001_create_soh_table.sql
   │   │   └── [SQL]    20260306_add_forecast_history.sql
-  │   └── schema/
-  │       ├── [SQL]    Complete MRP Schema.sql
-  │       ├── [SQL]    functions.sql
-  │       ├── [SQL]    kpi_snapshots.sql
-  │       └── [SQL]    tables.sql
+  │   ├── schema/
+  │   │   └── [SQL]    kpi_snapshots.sql
+  │   └── [MD]     README.md
   ├── src/
   │   ├── config/
   │   │   └── [TS]     supabase.ts
@@ -53,10 +59,11 @@
   ├── [JSON]   package.json
   ├── [JSON]   package-lock.json
   ├── [TXT]    project-structure.txt
+  ├── [MD]     README.md
   ├── [YAML]   render.yaml
   ├── [JSON]   tsconfig.json
   └── [SH]     update-structure.sh
 
 +----------------------------------------------------------+
-|  SUMMARY:  Folders: 9    | Files: 38   | Total: 47       |
+|  SUMMARY:  Folders: 12   | Files: 42   | Total: 54       |
 +----------------------------------------------------------+
