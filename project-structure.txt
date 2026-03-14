@@ -1,49 +1,57 @@
-.
-|____.env
-|____tsconfig.json
-|____update-structure.sh
-|____render.yaml
-|____project-structure.txt
-|____Architecture_Blueprint.md
-|____.git
-|____package.json
-|____src
-| |____middleware
-| | |____errorHandler.ts
-| | |____validation.ts
-| |____controllers
-| | |____soh.controller.ts
-| | |____product.controller.ts
-| | |____dashboard.controller.ts
-| | |____snapshot.controller.ts
-| | |____purchaseOrder.controller.ts
-| | |____bom.controller.ts
-| | |____import.controller.ts
-| | |____forecast.controller.ts
-| |____utils
-| | |____asyncHandler.ts
-| | |____logger.ts
-| |____server.ts
-| |____routes
-| | |____product.routes.ts
-| | |____purchaseOrder.routes.ts
-| | |____bom.routes.ts
-| | |____import.routes.ts
-| | |____soh.routes.ts
-| | |____forecast.routes.ts
-| | |____snapshot.routes.ts
-| | |____dashboard.routes.ts
-| |____config
-| | |____supabase.ts
-|____package-lock.json
-|____database
-| |____migrations
-| | |____20260306_add_forecast_history.sql
-| | |____001_create_soh_table.sql
-| |____schema
-| | |____kpi_snapshots.sql
-| | |____tables.sql
-| | |____functions.sql
-| | |____Complete MRP Schema.sql
-|____.gitignore
-|____health.routes.ts
++----------------------------------------------------------+
+|                                                          |
+|          BACKEND PROJECT STRUCTURE                       |
+|          mrp-system-backend                              |
+|                                                          |
+|          Generated: 2026-03-14 06:16:48                  |
+|                                                          |
++----------------------------------------------------------+
+
+  mrp-system-backend/
+  |
+  ├── database/
+  │   ├── migrations/
+  │   │   └── [SQL]    001_create_soh_table.sql
+  │   └── schema/
+  │       ├── [SQL]    Complete MRP Schema.sql
+  │       ├── [SQL]    functions.sql
+  │       └── [SQL]    tables.sql
+  ├── src/
+  │   ├── config/
+  │   │   └── [TS]     supabase.ts
+  │   ├── controllers/
+  │   │   ├── [TS]     bom.controller.ts
+  │   │   ├── [TS]     dashboard.controller.ts
+  │   │   ├── [TS]     forecast.controller.ts
+  │   │   ├── [TS]     import.controller.ts
+  │   │   ├── [TS]     product.controller.ts
+  │   │   ├── [TS]     purchaseOrder.controller.ts
+  │   │   └── [TS]     soh.controller.ts
+  │   ├── middleware/
+  │   │   ├── [TS]     errorHandler.ts
+  │   │   └── [TS]     validation.ts
+  │   ├── routes/
+  │   │   ├── [TS]     bom.routes.ts
+  │   │   ├── [TS]     dashboard.routes.ts
+  │   │   ├── [TS]     forecast.routes.ts
+  │   │   ├── [TS]     import.routes.ts
+  │   │   ├── [TS]     product.routes.ts
+  │   │   ├── [TS]     purchaseOrder.routes.ts
+  │   │   └── [TS]     soh.routes.ts
+  │   ├── utils/
+  │   │   ├── [TS]     asyncHandler.ts
+  │   │   └── [TS]     logger.ts
+  │   └── [TS]     server.ts
+  ├── [ENV]    .env
+  ├── [GIT]    .gitignore
+  ├── [TS]     health.routes.ts
+  ├── [JSON]   package.json
+  ├── [JSON]   package-lock.json
+  ├── [TXT]    project-structure.txt
+  ├── [YAML]   render.yaml
+  ├── [JSON]   tsconfig.json
+  └── [SH]     update-structure.sh
+
++----------------------------------------------------------+
+|  SUMMARY:  Folders: 9    | Files: 33   | Total: 42       |
++----------------------------------------------------------+
